@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - eip-1-asset-registry
+          - eip-2-transfer-domain
+          - eip-3-document-bundle
+          - eip-4-impact-snapshot
+          - eip-5-nav-oracle
+          - eip-6-compliance-event
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Cache Foundry artifacts
+        uses: actions/cache@v4
+        with:
+          path: packages/${{ matrix.package }}/out
+          key: foundry-${{ matrix.package }}-${{ hashFiles(format('packages/{0}/src/**/*.sol', matrix.package)) }}
+          restore-keys: foundry-${{ matrix.package }}-
+
+      - name: Build & test
+        working-directory: packages/${{ matrix.package }}
+        run: |
+          if ! ls src/interfaces/*.sol 2>/dev/null | grep -q .; then
+            echo "No contracts yet, skipping"
+            exit 0
+          fi
+          forge install
+          forge build --sizes
+          forge test -vvv
+
+  static-analysis:
+    name: Slither (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - eip-1-asset-registry
+          - eip-2-transfer-domain
+          - eip-3-document-bundle
+          - eip-4-impact-snapshot
+          - eip-5-nav-oracle
+          - eip-6-compliance-event
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Check for contracts
+        id: check
+        working-directory: packages/${{ matrix.package }}
+        run: |
+          if ls src/interfaces/*.sol 2>/dev/null | grep -q .; then
+            echo "has_contracts=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_contracts=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Slither
+        if: steps.check.outputs.has_contracts == 'true'
+        uses: crytic/slither-action@v0.4.0
+        with:
+          target: packages/${{ matrix.package }}
+
+      - name: No contracts, skipping
+        if: steps.check.outputs.has_contracts == 'false'
+        run: echo "No contracts yet, skipping"
+
+  gas-snapshot:
+    name: Gas Snapshot (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - eip-1-asset-registry
+          - eip-2-transfer-domain
+          - eip-3-document-bundle
+          - eip-4-impact-snapshot
+          - eip-5-nav-oracle
+          - eip-6-compliance-event
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Cache Foundry artifacts
+        uses: actions/cache@v4
+        with:
+          path: packages/${{ matrix.package }}/out
+          key: foundry-${{ matrix.package }}-${{ hashFiles(format('packages/{0}/src/**/*.sol', matrix.package)) }}
+          restore-keys: foundry-${{ matrix.package }}-
+
+      - name: Gas snapshot
+        working-directory: packages/${{ matrix.package }}
+        run: |
+          if ! ls src/interfaces/*.sol 2>/dev/null | grep -q .; then
+            echo "No contracts yet, skipping"
+            exit 0
+          fi
+          forge install
+          forge snapshot
+
+      - name: Upload gas snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gas-snapshot-${{ matrix.package }}
+          path: packages/${{ matrix.package }}/.gas-snapshot
+          if-no-files-found: ignore

@@ -1,0 +1,14 @@
+name: PR Notifications
+
+on:
+  pull_request:
+    types: [review_requested, closed]
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  notify:
+    uses: KulaDao/.github/.github/workflows/pr_r4r_slack_notifier.yml@main
+    secrets: inherit
