@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IDocumentBundleAnchor} from "../interfaces/IDocumentBundleAnchor.sol";
@@ -24,6 +24,8 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         _grantRole(ANCHOR_ROLE, admin);
     }
 
+    /// @dev metadataURI is stored publicly on-chain. Do not include PII or sensitive content.
+    /// @dev Caller must hold ANCHOR_ROLE at the time of the call.
     function anchorBundle(
         bytes32 bundleHash,
         bytes32 subjectId,
@@ -40,6 +42,8 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         _anchor(bundleHash, subjectId, role, documentCount, metadataURI, tripleKey, slotKey);
     }
 
+    /// @dev Requires ANCHOR_ROLE at call time AND (original anchoredBy OR DEFAULT_ADMIN_ROLE).
+    /// @dev Admin supersede capability requires holding both DEFAULT_ADMIN_ROLE and ANCHOR_ROLE.
     function supersedeBundle(
         bytes32 oldBundleHash,
         bytes32 newBundleHash,
@@ -85,6 +89,11 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
 
     function activeBundle(bytes32 subjectId, bytes32 role) external view returns (bytes32) {
         return _activeSlots[keccak256(abi.encodePacked(subjectId, role))];
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+        return interfaceId == type(IDocumentBundleAnchor).interfaceId
+            || super.supportsInterface(interfaceId);
     }
 
     function _anchor(

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 library BundleHashLib {
     struct DocumentEntry {
@@ -23,6 +23,8 @@ library BundleHashLib {
     bytes32 internal constant AMENDMENT     = keccak256("AMENDMENT");
     bytes32 internal constant SUPPORTING    = keccak256("SUPPORTING");
 
+    /// @dev Caller must invoke sortEntries() on the input array before calling this function.
+    /// Unsorted inputs produce a valid but non-canonical hash that will not match the canonical derivation.
     function computeBundleHash(DocumentEntry[] memory entries) internal pure returns (bytes32) {
         require(entries.length > 0, "BundleHashLib: empty bundle");
         bytes memory concatenated = abi.encodePacked(SCHEMA_V1);
