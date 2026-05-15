@@ -71,6 +71,9 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         _anchor(newBundleHash, subjectId, role, documentCount, metadataURI, newTripleKey, slotKey);
     }
 
+    /// @dev Returns the AnchorRecord for a bundleHash. When the same bundleHash is
+    /// anchored for multiple (subjectId, role) pairs, returns the most-recently-anchored
+    /// record. Use activeBundle(subjectId, role) for authoritative per-subject lookup.
     function getAnchor(bytes32 bundleHash) external view returns (AnchorRecord memory) {
         require(_records[bundleHash].anchoredAt != 0, "DocumentBundleAnchor: not anchored");
         return _records[bundleHash];

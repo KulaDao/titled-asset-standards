@@ -113,6 +113,20 @@ contract DocumentBundleAnchorTest is Test {
         anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 1, "");
     }
 
+    function test_supersedeBundle_adminCanSupersede() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+
+        // admin has DEFAULT_ADMIN_ROLE but did NOT anchor BUNDLE_1 — should still succeed
+        vm.prank(admin);
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2-admin");
+
+        IDocumentBundleAnchor.AnchorRecord memory old = anchor.getAnchor(BUNDLE_1);
+        assertTrue(old.superseded, "old bundle should be superseded by admin");
+        assertEq(old.supersededBy, BUNDLE_2, "supersededBy mismatch");
+        assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_2, "active slot should be BUNDLE_2");
+    }
+
     function test_supersedeBundle_revertsAlreadySuperseded() public {
         vm.prank(anchorUser);
         anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "");
