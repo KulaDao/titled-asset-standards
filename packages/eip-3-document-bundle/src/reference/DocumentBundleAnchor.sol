@@ -66,9 +66,9 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         old.superseded   = true;
         old.supersededBy = newBundleHash;
 
-        _anchor(newBundleHash, subjectId, role, documentCount, metadataURI, newTripleKey, slotKey);
-
         emit BundleSuperseded(oldBundleHash, newBundleHash, subjectId);
+
+        _anchor(newBundleHash, subjectId, role, documentCount, metadataURI, newTripleKey, slotKey);
     }
 
     function getAnchor(bytes32 bundleHash) external view returns (AnchorRecord memory) {
