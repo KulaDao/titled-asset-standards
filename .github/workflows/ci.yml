@@ -81,6 +81,7 @@ jobs:
         uses: crytic/slither-action@v0.4.0
         with:
           target: packages/${{ matrix.package }}
+          fail-on: high
 
       - name: No contracts, skipping
         if: steps.check.outputs.has_contracts == 'false'
