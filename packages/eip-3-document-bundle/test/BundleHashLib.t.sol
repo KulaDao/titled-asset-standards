@@ -4,6 +4,12 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {BundleHashLib} from "../src/libraries/BundleHashLib.sol";
 
+contract BundleHashLibHarness {
+    function computeBundleHash(BundleHashLib.DocumentEntry[] memory entries) external pure returns (bytes32) {
+        return BundleHashLib.computeBundleHash(entries);
+    }
+}
+
 contract BundleHashLibTest is Test {
     function _entry(bytes32 content, bytes32 role, bytes32 mime, bytes32 fname, bytes32 norm)
         internal pure returns (BundleHashLib.DocumentEntry memory)
@@ -123,5 +129,12 @@ contract BundleHashLibTest is Test {
         assertEq(BundleHashLib.PROFILE_RAW,          keccak256("NORM:RAW:V1"),             "PROFILE_RAW constant mismatch");
         assertEq(BundleHashLib.PROFILE_JSON_RFC8785, keccak256("NORM:JSON:RFC8785:V1"),    "PROFILE_JSON_RFC8785 constant mismatch");
         assertEq(BundleHashLib.PROFILE_XML_C14N11,   keccak256("NORM:XML:C14N11:V1"),      "PROFILE_XML_C14N11 constant mismatch");
+    }
+
+    function test_computeBundleHash_revertsOnEmptyBundle() public {
+        BundleHashLib.DocumentEntry[] memory empty = new BundleHashLib.DocumentEntry[](0);
+        BundleHashLibHarness harness = new BundleHashLibHarness();
+        vm.expectRevert("BundleHashLib: empty bundle");
+        harness.computeBundleHash(empty);
     }
 }

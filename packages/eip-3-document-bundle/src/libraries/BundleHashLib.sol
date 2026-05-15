@@ -10,6 +10,7 @@ library BundleHashLib {
         bytes32 normProfileId;
     }
 
+    // TODO: replace XXXX with assigned EIP number before submission — this hash will change
     bytes32 internal constant SCHEMA_V1             = keccak256("EIP-XXXX:BUNDLE:V1");
     bytes32 internal constant PROFILE_RAW           = keccak256("NORM:RAW:V1");
     bytes32 internal constant PROFILE_JSON_RFC8785  = keccak256("NORM:JSON:RFC8785:V1");
@@ -23,6 +24,7 @@ library BundleHashLib {
     bytes32 internal constant SUPPORTING    = keccak256("SUPPORTING");
 
     function computeBundleHash(DocumentEntry[] memory entries) internal pure returns (bytes32) {
+        require(entries.length > 0, "BundleHashLib: empty bundle");
         bytes memory concatenated = abi.encodePacked(SCHEMA_V1);
         for (uint256 i = 0; i < entries.length; i++) {
             bytes32 leaf = keccak256(abi.encodePacked(
@@ -37,6 +39,8 @@ library BundleHashLib {
         return keccak256(concatenated);
     }
 
+    // Sorts entries in-place by role asc, filenameHash asc, contentHash asc.
+    // Returns the same array reference — the input is also modified.
     function sortEntries(DocumentEntry[] memory entries) internal pure returns (DocumentEntry[] memory) {
         uint256 n = entries.length;
         for (uint256 i = 0; i < n; i++) {
