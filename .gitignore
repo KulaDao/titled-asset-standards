@@ -1,0 +1,6 @@
+# Foundry build artifacts and cache
+out/
+cache/
+
+# macOS
+.DS_Store
