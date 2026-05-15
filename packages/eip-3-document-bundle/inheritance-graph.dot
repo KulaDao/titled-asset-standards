@@ -1,0 +1,13 @@
+digraph "" {
+c295_AccessControl -> c400_Context [ label="1" ];
+c295_AccessControl -> c424_ERC165 [ label="2" ];
+c295_AccessControl[shape="box"label=< <TABLE border="0"><TR><TD align="center"><B>AccessControl</B></TD></TR><TR><TD align="left"><I>Private Functions:</I></TD></TR><TR><TD align="left">    _checkRole(bytes32)</TD></TR><TR><TD align="left">    _checkRole(bytes32,address)</TD></TR><TR><TD align="left">    _setRoleAdmin(bytes32,bytes32)</TD></TR><TR><TD align="left">    _grantRole(bytes32,address)</TD></TR><TR><TD align="left">    _revokeRole(bytes32,address)</TD></TR><TR><TD align="left"><I>Modifiers:</I></TD></TR><TR><TD align="left">    onlyRole(bytes32)</TD></TR><TR><TD align="left"><I>Public Variables:</I></TD></TR><TR><TD align="left">    DEFAULT_ADMIN_ROLE</TD></TR><TR><TD align="left"><I>Private Variables:</I></TD></TR><TR><TD align="left">    _roles</TD></TR></TABLE> >];
+
+c400_Context[shape="box"label=< <TABLE border="0"><TR><TD align="center"><B>Context</B></TD></TR><TR><TD align="left"><I>Private Functions:</I></TD></TR><TR><TD align="left">    _msgSender()</TD></TR><TR><TD align="left">    _msgData()</TD></TR></TABLE> >];
+
+c424_ERC165[shape="box"label=< <TABLE border="0"><TR><TD align="center"><B>ERC165</B></TD></TR></TABLE> >];
+
+c1151_DocumentBundleAnchor -> c528_IDocumentBundleAnchor;
+c1151_DocumentBundleAnchor[shape="box"label=< <TABLE border="0"><TR><TD align="center"><B>DocumentBundleAnchor</B></TD></TR><TR><TD align="left"><I>Public Functions:</I></TD></TR><TR><TD align="left"><font color="#FFA500">    anchorBundle(bytes32,bytes32,bytes32,uint256,string)</font></TD></TR><TR><TD align="left"><font color="#FFA500">    supersedeBundle(bytes32,bytes32,bytes32,bytes32,uint256,string)</font></TD></TR><TR><TD align="left"><font color="#FFA500">    getAnchor(bytes32)</font></TD></TR><TR><TD align="left"><font color="#FFA500">    isAnchored(bytes32)</font></TD></TR><TR><TD align="left"><font color="#FFA500">    activeBundle(bytes32,bytes32)</font></TD></TR><TR><TD align="left"><I>Private Functions:</I></TD></TR><TR><TD align="left">    _anchor(bytes32,bytes32,bytes32,uint256,string,bytes32,bytes32)</TD></TR><TR><TD align="left"><I>Public Variables:</I></TD></TR><TR><TD align="left">    ANCHOR_ROLE</TD></TR><TR><TD align="left"><I>Private Variables:</I></TD></TR><TR><TD align="left">    _records</TD></TR><TR><TD align="left">    _anchored</TD></TR><TR><TD align="left">    _activeSlots</TD></TR></TABLE> >];
+
+}
