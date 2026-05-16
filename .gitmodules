@@ -1,3 +1,9 @@
 [submodule "packages/eip-3-document-bundle/lib/openzeppelin-contracts"]
 	path = packages/eip-3-document-bundle/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "packages/eip-4-impact-snapshot/lib/openzeppelin-contracts"]
+	path = packages/eip-4-impact-snapshot/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "packages/eip-4-impact-snapshot/lib/forge-std"]
+	path = packages/eip-4-impact-snapshot/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
