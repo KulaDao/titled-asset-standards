@@ -31,8 +31,8 @@ contract ImpactSnapshotLog is
 
     // _activeMethodologyHash[subjectId][indicatorId]
     mapping(bytes32 => mapping(bytes32 => bytes32)) private _activeMethodologyHash;
-    // _activeMethodologyURI[subjectId][indicatorId]
-    mapping(bytes32 => mapping(bytes32 => string)) private _activeMethodologyURI;
+    // _activeMethodologyUri[subjectId][indicatorId]
+    mapping(bytes32 => mapping(bytes32 => string)) private _activeMethodologyUri;
     // _methodologyInitialized[subjectId][indicatorId]
     mapping(bytes32 => mapping(bytes32 => bool)) private _methodologyInitialized;
 
@@ -107,7 +107,7 @@ contract ImpactSnapshotLog is
 
         if (!_methodologyInitialized[subjectId][indicatorId]) {
             _activeMethodologyHash[subjectId][indicatorId] = methodologyHash;
-            _activeMethodologyURI[subjectId][indicatorId]  = methodologyURI;
+            _activeMethodologyUri[subjectId][indicatorId]  = methodologyURI;
             _methodologyInitialized[subjectId][indicatorId] = true;
         }
 
@@ -248,7 +248,7 @@ contract ImpactSnapshotLog is
         );
 
         _activeMethodologyHash[subjectId][indicatorId] = newMethodologyHash;
-        _activeMethodologyURI[subjectId][indicatorId]  = newMethodologyURI;
+        _activeMethodologyUri[subjectId][indicatorId]  = newMethodologyURI;
 
         emit MethodologySuperseded(subjectId, indicatorId, oldMethodologyHash, newMethodologyHash, effectiveFromOrdinal);
     }
@@ -258,7 +258,7 @@ contract ImpactSnapshotLog is
     {
         return (
             _activeMethodologyHash[subjectId][indicatorId],
-            _activeMethodologyURI[subjectId][indicatorId]
+            _activeMethodologyUri[subjectId][indicatorId]
         );
     }
 

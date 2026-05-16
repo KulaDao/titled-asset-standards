@@ -5,7 +5,6 @@ import {Test} from "forge-std/Test.sol";
 import {ImpactSnapshotLog} from "../src/reference/ImpactSnapshotLog.sol";
 import {IImpactSnapshotLog, NO_CORRECTION} from "../src/interfaces/IImpactSnapshotLog.sol";
 import {IImpactAttestation} from "../src/interfaces/IImpactAttestation.sol";
-import {IMethodologyVersioning} from "../src/interfaces/IMethodologyVersioning.sol";
 import {
     CARBON_OFFSET,
     CARBON_EMITTED,
