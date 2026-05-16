@@ -7,3 +7,6 @@ solc_version = "0.8.24"
 remappings = [
   "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"
 ]
+
+[lint]
+exclude_lints = ["asm-keccak256"]
