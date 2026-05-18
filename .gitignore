@@ -19,3 +19,6 @@ broadcast/
 .DS_Store
 .DS_Store?
 ._*
+
+# AI planning docs
+docs/superpowers/
