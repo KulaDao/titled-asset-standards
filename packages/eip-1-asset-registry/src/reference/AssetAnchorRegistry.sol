@@ -105,4 +105,46 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, AccessControl {
 
         emit AnchorRegistered(anchorId, legalHash, evidenceHash);
     }
+
+    /// @notice Permanently deactivates an anchor. Cannot be reversed by re-attestation.
+    function deactivateAnchor(bytes32 anchorId, string calldata reason)
+        external onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        AnchorRecord storage rec = _records[anchorId];
+        require(rec.registeredAt != 0, "AssetAnchorRegistry: anchor not found");
+        require(rec.active,            "AssetAnchorRegistry: already deactivated");
+
+        rec.active = false;
+        emit AnchorDeactivated(anchorId, reason);
+    }
+
+    /// @notice Update expiresAt for re-attestation. Reverts if the anchor is manually deactivated.
+    function reattest(bytes32 anchorId, uint64 newExpiresAt, uint64 newAttestationDate)
+        external onlyRole(REGISTRAR_ROLE)
+    {
+        AnchorRecord storage rec = _records[anchorId];
+        require(rec.registeredAt != 0,          "AssetAnchorRegistry: anchor not found");
+        require(rec.active,                     "AssetAnchorRegistry: manually deactivated");
+        require(newExpiresAt > block.timestamp,  "AssetAnchorRegistry: expiresAt must be future");
+
+        AnchorMetadataLib.AnchorMetadata storage meta = _metadata[anchorId];
+        meta.expiresAt       = newExpiresAt;
+        meta.attestationDate = newAttestationDate;
+    }
+
+    /// @notice Returns the decoded metadata for an anchor.
+    function getMetadata(bytes32 anchorId)
+        external view returns (AnchorMetadataLib.AnchorMetadata memory)
+    {
+        require(_records[anchorId].registeredAt != 0, "AssetAnchorRegistry: anchor not found");
+        return _metadata[anchorId];
+    }
+
+    /// @notice Returns false if active == false (manual deactivation) OR block.timestamp > expiresAt.
+    ///         Manual deactivation takes precedence — reattest() reverts on a deactivated anchor.
+    function isActive(bytes32 anchorId) external view returns (bool) {
+        AnchorRecord storage rec = _records[anchorId];
+        if (!rec.active) return false;
+        return block.timestamp <= _metadata[anchorId].expiresAt;
+    }
 }

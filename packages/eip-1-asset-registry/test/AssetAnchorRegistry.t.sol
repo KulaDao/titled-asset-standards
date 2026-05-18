@@ -227,4 +227,185 @@ contract AssetAnchorRegistryTest is Test {
         registry.bindToken(anchorId, token, 0);
         assertTrue(registry.isBound(anchorId), "should be bound");
     }
+
+    // ─── isBound after deactivation ───────────────────────────────────
+
+    function test_isBound_trueAfterDeactivation() public {
+        vm.startPrank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        registry.bindToken(anchorId, token, 0);
+        vm.stopPrank();
+
+        vm.prank(admin);
+        registry.deactivateAnchor(anchorId, "retired");
+
+        assertTrue(registry.isBound(anchorId), "isBound must remain true after deactivation");
+    }
+
+    // ─── deactivateAnchor ─────────────────────────────────────────────
+
+    function test_deactivateAnchor_setsActiveFalse() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        vm.prank(admin);
+        registry.deactivateAnchor(anchorId, "custody failure");
+
+        IAssetAnchorRegistry.AnchorRecord memory rec = registry.getAnchor(anchorId);
+        assertFalse(rec.active, "active should be false after deactivation");
+    }
+
+    function test_deactivateAnchor_emitsAnchorDeactivated() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        vm.expectEmit(true, false, false, true);
+        emit AnchorDeactivated(anchorId, "custody failure");
+        vm.prank(admin);
+        registry.deactivateAnchor(anchorId, "custody failure");
+    }
+
+    function test_deactivateAnchor_revertsNotFound() public {
+        vm.prank(admin);
+        vm.expectRevert("AssetAnchorRegistry: anchor not found");
+        registry.deactivateAnchor(keccak256("nonexistent"), "reason");
+    }
+
+    function test_deactivateAnchor_revertsAlreadyDeactivated() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        vm.prank(admin);
+        registry.deactivateAnchor(anchorId, "first");
+
+        vm.prank(admin);
+        vm.expectRevert("AssetAnchorRegistry: already deactivated");
+        registry.deactivateAnchor(anchorId, "second");
+    }
+
+    function test_deactivateAnchor_revertsUnauthorized() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        vm.prank(other);
+        vm.expectRevert();
+        registry.deactivateAnchor(anchorId, "reason");
+    }
+
+    // ─── reattest ─────────────────────────────────────────────────────
+
+    function test_reattest_updatesExpiresAt() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(1_000_000));
+
+        vm.prank(registrar);
+        registry.reattest(anchorId, 3_000_000, uint64(500_000));
+
+        AnchorMetadataLib.AnchorMetadata memory meta = registry.getMetadata(anchorId);
+        assertEq(meta.expiresAt,       3_000_000,      "expiresAt should be updated");
+        assertEq(meta.attestationDate, uint64(500_000), "attestationDate should be updated");
+    }
+
+    function test_reattest_revertsIfManuallyDeactivated() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(1_000_000));
+
+        vm.prank(admin);
+        registry.deactivateAnchor(anchorId, "retired");
+
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: manually deactivated");
+        registry.reattest(anchorId, 3_000_000, uint64(500_000));
+    }
+
+    function test_reattest_revertsAnchorNotFound() public {
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: anchor not found");
+        registry.reattest(keccak256("nonexistent"), 2_000_000, 1_000_000);
+    }
+
+    function test_reattest_revertsExpiresAtInPast() public {
+        vm.warp(1_500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: expiresAt must be future");
+        registry.reattest(anchorId, 1_000_000, uint64(1_500_000));
+    }
+
+    // ─── isActive ─────────────────────────────────────────────────────
+
+    function test_isActive_trueWhenActiveAndNotExpired() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        assertTrue(registry.isActive(anchorId), "should be active before expiry");
+    }
+
+    function test_isActive_falseWhenExpired() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(1_000_000));
+
+        vm.warp(1_000_001);
+        assertFalse(registry.isActive(anchorId), "should be inactive after expiry");
+    }
+
+    function test_isActive_falseWhenManuallyDeactivated() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        vm.prank(admin);
+        registry.deactivateAnchor(anchorId, "retired");
+
+        assertFalse(registry.isActive(anchorId), "should be inactive after manual deactivation");
+    }
+
+    function test_isActive_restoredAfterReattest() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(1_000_000));
+
+        vm.warp(1_000_001);
+        assertFalse(registry.isActive(anchorId), "should be inactive after expiry");
+
+        vm.prank(registrar);
+        registry.reattest(anchorId, 3_000_000, uint64(1_000_001));
+        assertTrue(registry.isActive(anchorId), "should be active after re-attestation");
+    }
+
+    function test_isActive_manualDeactivationBlocksReattest() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(1_000_000));
+
+        vm.prank(admin);
+        registry.deactivateAnchor(anchorId, "retired");
+
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: manually deactivated");
+        registry.reattest(anchorId, 3_000_000, uint64(500_000));
+    }
+
+    // ─── getMetadata ──────────────────────────────────────────────────
+
+    function test_getMetadata_returnsDecodedFields() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        AnchorMetadataLib.AnchorMetadata memory meta = registry.getMetadata(anchorId);
+        assertEq(meta.assetClass,      bytes32("EQUITY"),     "assetClass mismatch");
+        assertEq(meta.jurisdiction,    bytes32("US"),         "jurisdiction mismatch");
+        assertEq(meta.attestationDate, uint64(1_000_000),     "attestationDate mismatch");
+        assertEq(meta.expiresAt,       uint64(2_000_000),     "expiresAt mismatch");
+        assertEq(meta.uri,             bytes("ipfs://QmFoo"), "uri mismatch");
+    }
+
+    function test_getMetadata_revertsNotFound() public {
+        vm.expectRevert("AssetAnchorRegistry: anchor not found");
+        registry.getMetadata(keccak256("nonexistent"));
+    }
 }
