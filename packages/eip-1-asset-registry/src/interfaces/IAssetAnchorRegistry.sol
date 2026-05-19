@@ -30,6 +30,13 @@ interface IAssetAnchorRegistry {
         string reason
     );
 
+    event AnchorReattested(
+        bytes32 indexed anchorId,
+        uint64 oldExpiresAt,
+        uint64 newExpiresAt,
+        uint64 newAttestationDate
+    );
+
     /// @notice Register a new anchor with dual hash references.
     /// @dev Reverts if the (legalHash, evidenceHash) pair is already registered in this registry.
     ///      Reverts if any required metadata field (assetClass, jurisdiction, attestationDate,

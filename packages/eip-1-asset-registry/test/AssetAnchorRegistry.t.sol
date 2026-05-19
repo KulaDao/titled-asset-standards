@@ -6,10 +6,16 @@ import {AssetAnchorRegistry} from "../src/reference/AssetAnchorRegistry.sol";
 import {IAssetAnchorRegistry} from "../src/interfaces/IAssetAnchorRegistry.sol";
 import {AnchorMetadataLib} from "../src/libraries/AnchorMetadataLib.sol";
 
+contract MockBoundToken {
+    address public anchorRegistry;
+    constructor(address registry) { anchorRegistry = registry; }
+}
+
 contract AssetAnchorRegistryTest is Test {
     event AnchorRegistered(bytes32 indexed anchorId, bytes32 legalHash, bytes32 evidenceHash);
     event TokenBound(bytes32 indexed anchorId, address indexed token, uint256 tokenId);
     event AnchorDeactivated(bytes32 indexed anchorId, string reason);
+    event AnchorReattested(bytes32 indexed anchorId, uint64 oldExpiresAt, uint64 newExpiresAt, uint64 newAttestationDate);
 
     AssetAnchorRegistry registry;
 
@@ -34,7 +40,7 @@ contract AssetAnchorRegistryTest is Test {
         return AnchorMetadataLib.encode(AnchorMetadataLib.AnchorMetadata({
             assetClass:      bytes32("EQUITY"),
             jurisdiction:    bytes32("US"),
-            attestationDate: uint64(1_000_000),
+            attestationDate: uint64(1),
             expiresAt:       expiresAt,
             uri:             bytes("ipfs://QmFoo"),
             extensions:      bytes("")
@@ -86,6 +92,18 @@ contract AssetAnchorRegistryTest is Test {
         registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
     }
 
+    function test_registerAnchor_revertsZeroLegalHash() public {
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: zero legalHash");
+        registry.registerAnchor(bytes32(0), EVIDENCE_HASH, _validMetadata(2_000_000));
+    }
+
+    function test_registerAnchor_revertsZeroEvidenceHash() public {
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: zero evidenceHash");
+        registry.registerAnchor(LEGAL_HASH, bytes32(0), _validMetadata(2_000_000));
+    }
+
     function test_registerAnchor_revertsInvalidMetadata() public {
         bytes memory badMeta = AnchorMetadataLib.encode(AnchorMetadataLib.AnchorMetadata({
             assetClass:      bytes32(0),
@@ -98,6 +116,42 @@ contract AssetAnchorRegistryTest is Test {
         vm.prank(registrar);
         vm.expectRevert("AnchorMetadataLib: missing assetClass");
         registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, badMeta);
+    }
+
+    function test_registerAnchor_revertsFutureAttestationDate() public {
+        bytes memory meta = AnchorMetadataLib.encode(AnchorMetadataLib.AnchorMetadata({
+            assetClass:      bytes32("EQUITY"),
+            jurisdiction:    bytes32("US"),
+            attestationDate: uint64(1_000_000),
+            expiresAt:       uint64(2_000_000),
+            uri:             bytes("ipfs://QmFoo"),
+            extensions:      bytes("")
+        }));
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: future attestation date");
+        registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, meta);
+    }
+
+    function test_registerAnchor_revertsExpiresAtNotAfterAttestationDate() public {
+        vm.warp(1_000_000);
+        bytes memory meta = AnchorMetadataLib.encode(AnchorMetadataLib.AnchorMetadata({
+            assetClass:      bytes32("EQUITY"),
+            jurisdiction:    bytes32("US"),
+            attestationDate: uint64(1_000_000),
+            expiresAt:       uint64(1_000_000),
+            uri:             bytes("ipfs://QmFoo"),
+            extensions:      bytes("")
+        }));
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: expiresAt not after attestationDate");
+        registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, meta);
+    }
+
+    function test_registerAnchor_revertsMetadataAlreadyExpired() public {
+        vm.warp(3_000_000);
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: metadata already expired");
+        registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
     }
 
     // ─── bindToken ────────────────────────────────────────────────────
@@ -122,6 +176,35 @@ contract AssetAnchorRegistryTest is Test {
         registry.bindToken(anchorId, token, 0);
 
         assertEq(registry.getAnchor(anchorId).boundToken, token, "admin bind failed");
+    }
+
+    function test_bindToken_revertsRegistryMismatch() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        address wrongToken = address(new MockBoundToken(address(0xDEAD)));
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: token registry mismatch");
+        registry.bindToken(anchorId, wrongToken, 0);
+    }
+
+    function test_bindToken_allowsPlainTokenWithoutAnchorRegistry() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        vm.prank(registrar);
+        registry.bindToken(anchorId, token, 0);
+        assertEq(registry.getAnchor(anchorId).boundToken, token);
+    }
+
+    function test_bindToken_allowsCompliantTokenPointingToThisRegistry() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        address compliantToken = address(new MockBoundToken(address(registry)));
+        vm.prank(registrar);
+        registry.bindToken(anchorId, compliantToken, 0);
+        assertEq(registry.getAnchor(anchorId).boundToken, compliantToken);
     }
 
     function test_bindToken_emitsTokenBound() public {
@@ -167,6 +250,63 @@ contract AssetAnchorRegistryTest is Test {
         vm.prank(registrar);
         vm.expectRevert("AssetAnchorRegistry: zero token address");
         registry.bindToken(anchorId, address(0), 0);
+    }
+
+    function test_bindToken_revertsTokenPairAlreadyBound() public {
+        vm.prank(registrar);
+        bytes32 anchorId1 = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        vm.prank(registrar);
+        registry.bindToken(anchorId1, token, 42);
+
+        vm.prank(registrar);
+        bytes32 anchorId2 = registry.registerAnchor(
+            keccak256("other-legal"), keccak256("other-evidence"), _validMetadata(2_000_000)
+        );
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: token pair already bound");
+        registry.bindToken(anchorId2, token, 42);
+    }
+
+    function test_registerAndBind_revertsTokenPairAlreadyBound() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        registry.registerAndBind(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000), token, 7);
+
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: token pair already bound");
+        registry.registerAndBind(
+            keccak256("other-legal"), keccak256("other-evidence"),
+            _validMetadata(2_000_000), token, 7
+        );
+    }
+
+    function test_bindToken_revertsAnchorInactive() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        vm.prank(admin);
+        registry.deactivateAnchor(anchorId, "test");
+
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: anchor inactive");
+        registry.bindToken(anchorId, token, 0);
+    }
+
+    function test_bindToken_revertsAnchorExpired() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        vm.warp(2_000_001);
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: anchor expired");
+        registry.bindToken(anchorId, token, 0);
+    }
+
+    function test_registerAndBind_revertsAnchorExpired() public {
+        vm.warp(3_000_000);
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: metadata already expired");
+        registry.registerAndBind(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000), token, 0);
     }
 
     // ─── registerAndBind ──────────────────────────────────────────────
@@ -335,6 +475,63 @@ contract AssetAnchorRegistryTest is Test {
         registry.reattest(anchorId, 1_000_000, uint64(1_500_000));
     }
 
+    function test_reattest_revertsUnauthorized_otherRegistrar() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(1_000_000));
+
+        address otherRegistrar = address(0xA3);
+        bytes32 registrarRole = registry.REGISTRAR_ROLE();
+        vm.prank(admin);
+        registry.grantRole(registrarRole, otherRegistrar);
+
+        vm.prank(otherRegistrar);
+        vm.expectRevert("AssetAnchorRegistry: not authorized to reattest");
+        registry.reattest(anchorId, 3_000_000, uint64(500_000));
+    }
+
+    function test_reattest_succeedsByAdmin() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(1_000_000));
+
+        vm.prank(admin);
+        registry.reattest(anchorId, 3_000_000, uint64(500_000));
+
+        assertEq(registry.getMetadata(anchorId).expiresAt, 3_000_000, "admin reattest failed");
+    }
+
+    function test_reattest_emitsAnchorReattested() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(1_000_000));
+
+        vm.prank(registrar);
+        vm.expectEmit(true, false, false, true);
+        emit AnchorReattested(anchorId, 1_000_000, 3_000_000, uint64(500_000));
+        registry.reattest(anchorId, 3_000_000, uint64(500_000));
+    }
+
+    function test_reattest_revertsZeroAttestationDate() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(1_000_000));
+
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: zero attestation date");
+        registry.reattest(anchorId, 3_000_000, 0);
+    }
+
+    function test_reattest_revertsFutureAttestationDate() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(1_000_000));
+
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: future attestation date");
+        registry.reattest(anchorId, 3_000_000, uint64(600_000));
+    }
+
     // ─── isActive ─────────────────────────────────────────────────────
 
     function test_isActive_trueWhenActiveAndNotExpired() public {
@@ -399,7 +596,7 @@ contract AssetAnchorRegistryTest is Test {
         AnchorMetadataLib.AnchorMetadata memory meta = registry.getMetadata(anchorId);
         assertEq(meta.assetClass,      bytes32("EQUITY"),     "assetClass mismatch");
         assertEq(meta.jurisdiction,    bytes32("US"),         "jurisdiction mismatch");
-        assertEq(meta.attestationDate, uint64(1_000_000),     "attestationDate mismatch");
+        assertEq(meta.attestationDate, uint64(1),              "attestationDate mismatch");
         assertEq(meta.expiresAt,       uint64(2_000_000),     "expiresAt mismatch");
         assertEq(meta.uri,             bytes("ipfs://QmFoo"), "uri mismatch");
     }
