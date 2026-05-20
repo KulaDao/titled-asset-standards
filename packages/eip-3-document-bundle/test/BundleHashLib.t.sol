@@ -131,6 +131,50 @@ contract BundleHashLibTest is Test {
         assertEq(BundleHashLib.PROFILE_XML_C14N11,   keccak256("NORM:XML:C14N11:V1"),      "PROFILE_XML_C14N11 constant mismatch");
     }
 
+    function test_sortEntries_totalOrderOnAllFiveFields() public {
+        bytes32 sharedRole     = BundleHashLib.LEGAL_BASIS;
+        bytes32 sharedFilename = keccak256("same.pdf");
+        bytes32 sharedContent  = keccak256("same-content");
+
+        // Entries that are equal on (role, filenameHash, contentHash) but differ on mimeTypeHash
+        BundleHashLib.DocumentEntry memory e1 = _entry(sharedContent, sharedRole, keccak256("text/plain"), sharedFilename, BundleHashLib.PROFILE_RAW);
+        BundleHashLib.DocumentEntry memory e2 = _entry(sharedContent, sharedRole, keccak256("application/pdf"), sharedFilename, BundleHashLib.PROFILE_RAW);
+
+        BundleHashLib.DocumentEntry[] memory fwd = new BundleHashLib.DocumentEntry[](2);
+        fwd[0] = e1; fwd[1] = e2;
+
+        BundleHashLib.DocumentEntry[] memory rev = new BundleHashLib.DocumentEntry[](2);
+        rev[0] = e2; rev[1] = e1;
+
+        fwd = BundleHashLib.sortEntries(fwd);
+        rev = BundleHashLib.sortEntries(rev);
+
+        assertEq(
+            BundleHashLib.computeBundleHash(fwd),
+            BundleHashLib.computeBundleHash(rev),
+            "entries differing only in mimeTypeHash must sort canonically"
+        );
+
+        // Entries equal on (role, filenameHash, contentHash, mimeTypeHash) but differ on normProfileId
+        BundleHashLib.DocumentEntry memory e3 = _entry(sharedContent, sharedRole, keccak256("pdf"), sharedFilename, BundleHashLib.PROFILE_RAW);
+        BundleHashLib.DocumentEntry memory e4 = _entry(sharedContent, sharedRole, keccak256("pdf"), sharedFilename, BundleHashLib.PROFILE_JSON_RFC8785);
+
+        BundleHashLib.DocumentEntry[] memory fwd2 = new BundleHashLib.DocumentEntry[](2);
+        fwd2[0] = e3; fwd2[1] = e4;
+
+        BundleHashLib.DocumentEntry[] memory rev2 = new BundleHashLib.DocumentEntry[](2);
+        rev2[0] = e4; rev2[1] = e3;
+
+        fwd2 = BundleHashLib.sortEntries(fwd2);
+        rev2 = BundleHashLib.sortEntries(rev2);
+
+        assertEq(
+            BundleHashLib.computeBundleHash(fwd2),
+            BundleHashLib.computeBundleHash(rev2),
+            "entries differing only in normProfileId must sort canonically"
+        );
+    }
+
     function test_computeBundleHash_revertsOnEmptyBundle() public {
         BundleHashLib.DocumentEntry[] memory empty = new BundleHashLib.DocumentEntry[](0);
         BundleHashLibHarness harness = new BundleHashLibHarness();

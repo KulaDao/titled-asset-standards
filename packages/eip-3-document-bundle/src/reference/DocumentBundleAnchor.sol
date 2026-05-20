@@ -7,16 +7,11 @@ import {IDocumentBundleAnchor} from "../interfaces/IDocumentBundleAnchor.sol";
 contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
     bytes32 public constant ANCHOR_ROLE = keccak256("ANCHOR");
 
-    // Records keyed by bundleHash. When the same bundleHash is anchored for
-    // multiple subjects, this stores the most-recently-anchored record.
-    // Active slots remain per-(subjectId, role) and are always authoritative.
+    // Records keyed by keccak256(abi.encode(bundleHash, subjectId, role)).
+    // Each (bundleHash, subjectId, role) triple has its own independent record.
     mapping(bytes32 => AnchorRecord) private _records;
 
-    // Tracks anchored (bundleHash, subjectId, role) triples to allow the same
-    // bundleHash to be registered independently for different subjects.
-    mapping(bytes32 => bool) private _anchored;
-
-    // Active bundle hash per keccak256(subjectId, role) slot.
+    // Active bundle hash per keccak256(abi.encode(subjectId, role)) slot.
     mapping(bytes32 => bytes32) private _activeSlots;
 
     constructor(address admin) {
@@ -33,10 +28,13 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         uint256 documentCount,
         string calldata metadataURI
     ) external onlyRole(ANCHOR_ROLE) {
-        bytes32 tripleKey = keccak256(abi.encodePacked(bundleHash, subjectId, role));
-        require(!_anchored[tripleKey], "DocumentBundleAnchor: already anchored");
+        require(bundleHash != bytes32(0), "DocumentBundleAnchor: zero bundleHash");
+        require(documentCount > 0,        "DocumentBundleAnchor: zero documentCount");
 
-        bytes32 slotKey = keccak256(abi.encodePacked(subjectId, role));
+        bytes32 tripleKey = _tripleKey(bundleHash, subjectId, role);
+        require(_records[tripleKey].anchoredAt == 0, "DocumentBundleAnchor: already anchored");
+
+        bytes32 slotKey = _slotKey(subjectId, role);
         require(_activeSlots[slotKey] == bytes32(0), "DocumentBundleAnchor: active slot occupied, use supersedeBundle");
 
         _anchor(bundleHash, subjectId, role, documentCount, metadataURI, tripleKey, slotKey);
@@ -52,11 +50,15 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         uint256 documentCount,
         string calldata metadataURI
     ) external onlyRole(ANCHOR_ROLE) {
-        AnchorRecord storage old = _records[oldBundleHash];
+        require(newBundleHash != bytes32(0), "DocumentBundleAnchor: zero newBundleHash");
+        require(documentCount > 0,           "DocumentBundleAnchor: zero documentCount");
+
+        bytes32 oldTripleKey = _tripleKey(oldBundleHash, subjectId, role);
+        AnchorRecord storage old = _records[oldTripleKey];
         require(old.anchoredAt != 0, "DocumentBundleAnchor: old bundle not anchored");
         require(!old.superseded,     "DocumentBundleAnchor: old bundle already superseded");
 
-        bytes32 slotKey = keccak256(abi.encodePacked(subjectId, role));
+        bytes32 slotKey = _slotKey(subjectId, role);
         require(_activeSlots[slotKey] == oldBundleHash, "DocumentBundleAnchor: old bundle not active for given slot");
 
         require(
@@ -64,31 +66,39 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
             "DocumentBundleAnchor: not authorized to supersede"
         );
 
-        bytes32 newTripleKey = keccak256(abi.encodePacked(newBundleHash, subjectId, role));
-        require(!_anchored[newTripleKey], "DocumentBundleAnchor: new bundle already anchored");
+        bytes32 newTripleKey = _tripleKey(newBundleHash, subjectId, role);
+        require(_records[newTripleKey].anchoredAt == 0, "DocumentBundleAnchor: new bundle already anchored");
 
         old.superseded   = true;
         old.supersededBy = newBundleHash;
 
-        emit BundleSuperseded(oldBundleHash, newBundleHash, subjectId);
+        emit BundleSuperseded(oldBundleHash, newBundleHash, subjectId, role);
 
         _anchor(newBundleHash, subjectId, role, documentCount, metadataURI, newTripleKey, slotKey);
     }
 
-    /// @dev Returns the AnchorRecord for a bundleHash. When the same bundleHash is
-    /// anchored for multiple (subjectId, role) pairs, returns the most-recently-anchored
-    /// record. Use activeBundle(subjectId, role) for authoritative per-subject lookup.
-    function getAnchor(bytes32 bundleHash) external view returns (AnchorRecord memory) {
-        require(_records[bundleHash].anchoredAt != 0, "DocumentBundleAnchor: not anchored");
-        return _records[bundleHash];
+    function getAnchor(bytes32 bundleHash, bytes32 subjectId, bytes32 role)
+        external view returns (AnchorRecord memory)
+    {
+        bytes32 key = _tripleKey(bundleHash, subjectId, role);
+        require(_records[key].anchoredAt != 0, "DocumentBundleAnchor: not anchored");
+        return _records[key];
     }
 
-    function isAnchored(bytes32 bundleHash) external view returns (bool) {
-        return _records[bundleHash].anchoredAt != 0;
+    function isAnchored(bytes32 bundleHash, bytes32 subjectId, bytes32 role) external view returns (bool) {
+        return _records[_tripleKey(bundleHash, subjectId, role)].anchoredAt != 0;
     }
 
     function activeBundle(bytes32 subjectId, bytes32 role) external view returns (bytes32) {
-        return _activeSlots[keccak256(abi.encodePacked(subjectId, role))];
+        return _activeSlots[_slotKey(subjectId, role)];
+    }
+
+    function _tripleKey(bytes32 bundleHash, bytes32 subjectId, bytes32 role) internal pure returns (bytes32) {
+        return keccak256(abi.encode(bundleHash, subjectId, role));
+    }
+
+    function _slotKey(bytes32 subjectId, bytes32 role) internal pure returns (bytes32) {
+        return keccak256(abi.encode(subjectId, role));
     }
 
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
@@ -105,9 +115,8 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         bytes32 tripleKey,
         bytes32 slotKey
     ) internal {
-        _anchored[tripleKey] = true;
         _activeSlots[slotKey] = bundleHash;
-        _records[bundleHash] = AnchorRecord({
+        _records[tripleKey] = AnchorRecord({
             bundleHash:    bundleHash,
             subjectId:     subjectId,
             role:          role,

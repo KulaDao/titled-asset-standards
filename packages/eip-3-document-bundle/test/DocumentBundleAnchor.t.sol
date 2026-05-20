@@ -39,7 +39,7 @@ contract DocumentBundleAnchorTest is Test {
         vm.prank(anchorUser);
         anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 3, "ipfs://QmFoo");
 
-        IDocumentBundleAnchor.AnchorRecord memory rec = anchor.getAnchor(BUNDLE_1);
+        IDocumentBundleAnchor.AnchorRecord memory rec = anchor.getAnchor(BUNDLE_1, SUBJECT_A, ROLE_1);
         assertEq(rec.bundleHash,    BUNDLE_1,          "bundleHash mismatch");
         assertEq(rec.subjectId,     SUBJECT_A,         "subjectId mismatch");
         assertEq(rec.role,          ROLE_1,            "role mismatch");
@@ -87,13 +87,13 @@ contract DocumentBundleAnchorTest is Test {
         vm.prank(anchorUser);
         anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2");
 
-        IDocumentBundleAnchor.AnchorRecord memory old = anchor.getAnchor(BUNDLE_1);
+        IDocumentBundleAnchor.AnchorRecord memory old = anchor.getAnchor(BUNDLE_1, SUBJECT_A, ROLE_1);
         assertTrue(old.superseded,              "old bundle should be superseded");
         assertEq(old.supersededBy, BUNDLE_2,    "supersededBy should point to BUNDLE_2");
 
         assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_2, "active slot should be BUNDLE_2");
 
-        IDocumentBundleAnchor.AnchorRecord memory newRec = anchor.getAnchor(BUNDLE_2);
+        IDocumentBundleAnchor.AnchorRecord memory newRec = anchor.getAnchor(BUNDLE_2, SUBJECT_A, ROLE_1);
         assertEq(newRec.bundleHash,    BUNDLE_2,   "new record bundleHash mismatch");
         assertEq(newRec.subjectId,     SUBJECT_A,  "new record subjectId mismatch");
         assertFalse(newRec.superseded,             "new record must not be superseded");
@@ -121,7 +121,7 @@ contract DocumentBundleAnchorTest is Test {
         vm.prank(admin);
         anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2-admin");
 
-        IDocumentBundleAnchor.AnchorRecord memory old = anchor.getAnchor(BUNDLE_1);
+        IDocumentBundleAnchor.AnchorRecord memory old = anchor.getAnchor(BUNDLE_1, SUBJECT_A, ROLE_1);
         assertTrue(old.superseded, "old bundle should be superseded by admin");
         assertEq(old.supersededBy, BUNDLE_2, "supersededBy mismatch");
         assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_2, "active slot should be BUNDLE_2");
@@ -149,7 +149,7 @@ contract DocumentBundleAnchorTest is Test {
         anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "");
 
         vm.prank(anchorUser);
-        vm.expectRevert("DocumentBundleAnchor: old bundle not active for given slot");
+        vm.expectRevert("DocumentBundleAnchor: old bundle not anchored");
         anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_B, ROLE_1, 1, "");
     }
 
@@ -162,6 +162,74 @@ contract DocumentBundleAnchorTest is Test {
 
         assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_1, "SUBJECT_A active slot wrong");
         assertEq(anchor.activeBundle(SUBJECT_B, ROLE_1), BUNDLE_1, "SUBJECT_B active slot wrong");
+    }
+
+    function test_differentSubjects_sameBundle_independentRecords() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "for-a");
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_B, ROLE_1, 2, "for-b");
+
+        IDocumentBundleAnchor.AnchorRecord memory recA = anchor.getAnchor(BUNDLE_1, SUBJECT_A, ROLE_1);
+        IDocumentBundleAnchor.AnchorRecord memory recB = anchor.getAnchor(BUNDLE_1, SUBJECT_B, ROLE_1);
+
+        assertEq(recA.subjectId,     SUBJECT_A, "recA subjectId wrong");
+        assertEq(recA.documentCount, 1,         "recA documentCount wrong");
+        assertEq(recA.metadataURI,   "for-a",   "recA metadataURI wrong");
+        assertFalse(recA.superseded,             "recA should not be superseded");
+
+        assertEq(recB.subjectId,     SUBJECT_B, "recB subjectId wrong");
+        assertEq(recB.documentCount, 2,         "recB documentCount wrong");
+        assertEq(recB.metadataURI,   "for-b",   "recB metadataURI wrong");
+        assertFalse(recB.superseded,             "recB should not be superseded");
+    }
+
+    function test_differentSubjects_supersedeA_doesNotAffectB() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "for-a");
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_B, ROLE_1, 1, "for-b");
+
+        vm.prank(anchorUser);
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2-a");
+
+        IDocumentBundleAnchor.AnchorRecord memory recA = anchor.getAnchor(BUNDLE_1, SUBJECT_A, ROLE_1);
+        IDocumentBundleAnchor.AnchorRecord memory recB = anchor.getAnchor(BUNDLE_1, SUBJECT_B, ROLE_1);
+
+        assertTrue(recA.superseded,  "recA should be superseded");
+        assertFalse(recB.superseded, "recB must not be affected by SUBJECT_A supersession");
+        assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_2, "SUBJECT_A active wrong");
+        assertEq(anchor.activeBundle(SUBJECT_B, ROLE_1), BUNDLE_1, "SUBJECT_B active wrong");
+    }
+
+    function test_anchorBundle_revertsZeroBundleHash() public {
+        vm.prank(anchorUser);
+        vm.expectRevert("DocumentBundleAnchor: zero bundleHash");
+        anchor.anchorBundle(bytes32(0), SUBJECT_A, ROLE_1, 1, "");
+    }
+
+    function test_anchorBundle_revertsZeroDocumentCount() public {
+        vm.prank(anchorUser);
+        vm.expectRevert("DocumentBundleAnchor: zero documentCount");
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 0, "");
+    }
+
+    function test_supersedeBundle_revertsZeroNewBundleHash() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+
+        vm.prank(anchorUser);
+        vm.expectRevert("DocumentBundleAnchor: zero newBundleHash");
+        anchor.supersedeBundle(BUNDLE_1, bytes32(0), SUBJECT_A, ROLE_1, 1, "");
+    }
+
+    function test_supersedeBundle_revertsZeroDocumentCount() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+
+        vm.prank(anchorUser);
+        vm.expectRevert("DocumentBundleAnchor: zero documentCount");
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 0, "");
     }
 
     function test_activeBundle_returnsZeroIfNone() public {
