@@ -1,0 +1,11 @@
+{
+  "../eip-3-document-bundle/lib/openzeppelin-contracts": {
+    "rev": "932fddf69a699a9a80fd2396fd1a2ab91cdda123"
+  },
+  "lib/openzeppelin-contracts": {
+    "tag": {
+      "name": "v5.2.0",
+      "rev": "acd4ff74de833399287ed6b31b4debf6b2b35527"
+    }
+  }
+}
