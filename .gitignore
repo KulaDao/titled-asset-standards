@@ -4,3 +4,6 @@ cache/
 
 # macOS
 .DS_Store
+docs/superpowers/
+.serena/
+.env

@@ -4,14 +4,14 @@ Reference implementations, interfaces, and test suites for six standalone EIP sp
 
 ## Packages
 
-| Package | EIP | Status |
+| Package | EIP | 
 |---|---|---|
-| `packages/eip-1-asset-registry` | Asset-Bound Token Registry | Spec in review |
-| `packages/eip-2-transfer-domain` | Directional Transfer Domain Registry | Spec reviewed (Reagan) |
-| `packages/eip-3-document-bundle` | Canonical Document Bundle Anchor | Spec reviewed (Reagan) |
-| `packages/eip-4-impact-snapshot` | Subject-Linked Impact Snapshot Log | Spec reviewed (Reagan) |
-| `packages/eip-5-nav-oracle` | On-Chain NAV Oracle Interface | Spec complete |
-| `packages/eip-6-compliance-event` | On-Chain Compliance Event Schema | Spec complete |
+| `packages/eip-1-asset-registry` | Asset-Bound Token Registry | 
+| `packages/eip-2-transfer-domain` | Directional Transfer Domain Registry | 
+| `packages/eip-3-document-bundle` | Canonical Document Bundle Anchor | 
+| `packages/eip-4-impact-snapshot` | Subject-Linked Impact Snapshot Log | 
+| `packages/eip-5-nav-oracle` | On-Chain NAV Oracle Interface | 
+| `packages/eip-6-compliance-event` | On-Chain Compliance Event Schema | 
 
 Each package is a self-contained Foundry project with its own interfaces, reference implementation, and tests. No package depends on another. The EIPs are designed to compose but can be adopted independently.
 
