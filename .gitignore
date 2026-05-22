@@ -27,3 +27,5 @@ crytic-export/
 
 # AI planning docs
 docs/superpowers/
+.serena
+.claude
