@@ -15,9 +15,6 @@ import {IDocumentBundleAnchor} from "../src/interfaces/IDocumentBundleAnchor.sol
 contract DocumentBundleAnchorFuzzTest {
     DocumentBundleAnchor internal anchor;
 
-    address internal admin      = address(0x10000);
-    address internal anchorUser = address(0x20000);
-
     bytes32[] internal bundles;
     bytes32[] internal subjects;
     bytes32[] internal roles;
@@ -35,9 +32,17 @@ contract DocumentBundleAnchorFuzzTest {
     mapping(bytes32 => bytes32)  internal activeSlotOf;
 
     constructor() {
-        anchor = new DocumentBundleAnchor(admin);
+        // Deploy with address(this) as admin so the harness can call grantRole.
+        anchor = new DocumentBundleAnchor(address(this));
         bytes32 anchorRole = anchor.ANCHOR_ROLE();
-        anchor.grantRole(anchorRole, anchorUser);
+        bytes32 adminRole  = anchor.DEFAULT_ADMIN_ROLE();
+        // Grant ANCHOR_ROLE + DEFAULT_ADMIN_ROLE to all Medusa sender addresses.
+        anchor.grantRole(anchorRole, address(0x10000));
+        anchor.grantRole(anchorRole, address(0x20000));
+        anchor.grantRole(anchorRole, address(0x30000));
+        anchor.grantRole(adminRole,  address(0x10000));
+        anchor.grantRole(adminRole,  address(0x20000));
+        anchor.grantRole(adminRole,  address(0x30000));
 
         bundles.push(keccak256("bundle-A"));
         bundles.push(keccak256("bundle-B"));
@@ -67,7 +72,7 @@ contract DocumentBundleAnchorFuzzTest {
 
         try anchor.anchorBundle(bundleHash, subjectId, roleId, docCount, "uri") {
             anchoredTriples.push(Triple(bundleHash, subjectId, roleId));
-            anchoredByOf[tk]  = anchorUser;
+            anchoredByOf[tk]  = address(this);
             activeSlotOf[sk]  = bundleHash;
         } catch {}
     }
@@ -91,7 +96,7 @@ contract DocumentBundleAnchorFuzzTest {
             activeSlotOf[_sk(t.subject, t.role)] = newBundle;
 
             anchoredTriples.push(Triple(newBundle, t.subject, t.role));
-            anchoredByOf[newTk] = anchorUser;
+            anchoredByOf[newTk] = address(this);
         } catch {}
     }
 
