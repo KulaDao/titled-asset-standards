@@ -36,6 +36,8 @@ jobs:
 
       - name: Build & test
         working-directory: packages/${{ matrix.package }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if ! ls src/interfaces/*.sol 2>/dev/null | grep -q .; then
             echo "No contracts yet, skipping"
@@ -117,6 +119,8 @@ jobs:
 
       - name: Gas snapshot
         working-directory: packages/${{ matrix.package }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if ! ls src/interfaces/*.sol 2>/dev/null | grep -q .; then
             echo "No contracts yet, skipping"
@@ -155,6 +159,7 @@ jobs:
           curl -sSfL "https://github.com/crytic/medusa/releases/download/${MEDUSA_VERSION}/medusa-linux-x64.tar.gz" | tar -xz
           sudo mv medusa /usr/local/bin/medusa
           medusa --version
+          pip install crytic-compile
 
       - name: Build contracts
         working-directory: packages/${{ matrix.package }}
