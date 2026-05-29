@@ -5,7 +5,7 @@ import {DocumentBundleAnchor} from "../src/reference/DocumentBundleAnchor.sol";
 import {IDocumentBundleAnchor} from "../src/interfaces/IDocumentBundleAnchor.sol";
 
 /// @dev Medusa fuzz harness for DocumentBundleAnchor.
-///      Run: medusa fuzz (from packages/eip-3-document-bundle)
+///      Run: medusa fuzz (from packages/eip-2-document-bundle)
 ///
 ///      Invariants checked after every call sequence:
 ///        property_anchoringOneTripleDoesNotMutateAnother

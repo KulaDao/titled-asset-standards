@@ -7,11 +7,11 @@ Reference implementations, interfaces, and test suites for six standalone EIP sp
 | Package | EIP | Status |
 |---|---|---|
 | `packages/eip-1-asset-registry` | Asset-Bound Token Registry | Spec in review |
-| `packages/eip-2-transfer-domain` | Directional Transfer Domain Registry | Spec reviewed (Reagan) |
-| `packages/eip-3-document-bundle` | Canonical Document Bundle Anchor | Spec reviewed (Reagan) |
-| `packages/eip-4-impact-snapshot` | Subject-Linked Impact Snapshot Log | Spec reviewed (Reagan) |
-| `packages/eip-5-nav-oracle` | On-Chain NAV Oracle Interface | Spec complete |
-| `packages/eip-6-compliance-event` | On-Chain Compliance Event Schema | Spec complete |
+| `packages/eip-2-document-bundle` | Canonical Document Bundle Anchor | Spec complete |
+| `packages/eip-3-transfer-domain` | Directional Transfer Domain Registry | Spec complete |
+| `packages/eip-4-compliance-event` | On-Chain Compliance Event Schema | Spec complete |
+| `packages/eip-5-impact-snapshot` | Subject-Linked Impact Snapshot Log | Spec complete |
+| `packages/eip-6-nav-oracle` | On-Chain NAV Oracle Interface | Spec complete |
 
 Each package is a self-contained Foundry project with its own interfaces, reference implementation, and tests. No package depends on another. The EIPs are designed to compose but can be adopted independently.
 
@@ -33,7 +33,7 @@ packages/eip-N-name/
 ## Building
 
 ```sh
-cd packages/eip-3-document-bundle
+cd packages/eip-2-document-bundle
 forge build
 forge test
 ```
@@ -44,12 +44,11 @@ Each EIP will be submitted independently to Ethereum Magicians and the EIPs repo
 
 ```
 specs/
-  EIP2_DirectionalTransferDomainRegistry_Spec.docx
-  EIP3_CanonicalDocumentBundleAnchor_Spec.docx
-  EIP4_SubjectLinkedImpactSnapshotLog_Spec.docx
-  EIP5_OnChainNAVOracleInterface_Spec.docx
-  EIP6_OnChainComplianceEventSchema_Spec.docx
-  EIP6_TravelRuleComplianceInterface_Spec.docx
+  EIP2_CanonicalDocumentBundleAnchor_Spec.docx
+  EIP3_DirectionalTransferDomainRegistry_Spec.docx
+  EIP4_OnChainComplianceEventSchema_Spec.docx
+  EIP5_SubjectLinkedImpactSnapshotLog_Spec.docx
+  EIP6_OnChainNAVOracleInterface_Spec.docx
 ```
 
 ## License

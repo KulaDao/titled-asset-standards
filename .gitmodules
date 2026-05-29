@@ -1,3 +1,3 @@
-[submodule "packages/eip-3-document-bundle/lib/openzeppelin-contracts"]
-	path = packages/eip-3-document-bundle/lib/openzeppelin-contracts
+[submodule "packages/eip-2-document-bundle/lib/openzeppelin-contracts"]
+	path = packages/eip-2-document-bundle/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
