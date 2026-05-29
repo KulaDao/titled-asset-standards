@@ -16,10 +16,6 @@ import {CARBON_OFFSET, ENERGY_GENERATED, UNIT_TCO2E} from "../src/libraries/Impa
 contract ImpactSnapshotLogFuzzTest {
     ImpactSnapshotLog internal isl;
 
-    address internal admin    = address(0x10000);
-    address internal reporter = address(0x20000);
-    address internal attestor = address(0x30000);
-
     bytes32 internal constant SUBJECT_A = keccak256("subject-a");
     bytes32 internal constant SUBJECT_B = keccak256("subject-b");
     bytes32 internal constant METHOD_1  = keccak256("method-v1");
@@ -28,8 +24,6 @@ contract ImpactSnapshotLogFuzzTest {
     bytes32[2] internal indicators = [CARBON_OFFSET, ENERGY_GENERATED];
     bytes32[2] internal subjects   = [SUBJECT_A, SUBJECT_B];
 
-    // tracks snapshots recorded by subject so we can pick valid indices
-    mapping(bytes32 => uint256) internal _snapshotCount;
     // tracks per-(subjectId, indicatorId, periodKey) whether an original exists
     mapping(bytes32 => bool) internal _periodOccupied;
     // minimum snapshot count ever seen (for monotonicity check)
@@ -38,9 +32,21 @@ contract ImpactSnapshotLogFuzzTest {
     uint64 internal _ts = 1_000_000;
 
     constructor() {
-        isl = new ImpactSnapshotLog(admin);
-        isl.grantRole(isl.REPORTER_ROLE(), reporter);
-        isl.grantRole(isl.ATTESTOR_ROLE(), attestor);
+        // Deploy with address(this) as admin so the harness can call grantRole.
+        isl = new ImpactSnapshotLog(address(this));
+        bytes32 reporterRole = isl.REPORTER_ROLE();
+        bytes32 attestorRole = isl.ATTESTOR_ROLE();
+        bytes32 adminRole    = isl.DEFAULT_ADMIN_ROLE();
+        // Grant roles to all Medusa sender addresses.
+        isl.grantRole(reporterRole, address(0x10000));
+        isl.grantRole(reporterRole, address(0x20000));
+        isl.grantRole(reporterRole, address(0x30000));
+        isl.grantRole(attestorRole, address(0x10000));
+        isl.grantRole(attestorRole, address(0x20000));
+        isl.grantRole(attestorRole, address(0x30000));
+        isl.grantRole(adminRole,    address(0x10000));
+        isl.grantRole(adminRole,    address(0x20000));
+        isl.grantRole(adminRole,    address(0x30000));
     }
 
     // ── State-mutating functions Medusa will call randomly ──────────────
@@ -77,7 +83,7 @@ contract ImpactSnapshotLogFuzzTest {
             subjectId, indicatorId, 100, 2, UNIT_TCO2E, start, end, method, "ipfs://v1", NO_CORRECTION
         ) {
             _periodOccupied[slotKey] = true;
-            _snapshotCount[subjectId]++;
+            // snapshot recorded
         } catch {}
     }
 
@@ -110,7 +116,7 @@ contract ImpactSnapshotLogFuzzTest {
         try isl.recordSnapshot{gas: 500_000}(
             subjectId, indicatorId, 200, 2, UNIT_TCO2E, start, end, method, "ipfs://v1", targetIndex
         ) {
-            _snapshotCount[subjectId]++;
+            // snapshot recorded
         } catch {}
     }
 
@@ -138,9 +144,6 @@ contract ImpactSnapshotLogFuzzTest {
         uint256 count = isl.snapshotCount(subjectId);
         if (count == 0) return;
         snapshotIdx = snapshotIdx % count;
-
-        IImpactSnapshotLog.IndicatorSnapshot memory snap = isl.getSnapshot(subjectId, snapshotIdx);
-        if (snap.reportedBy == attestor) return;
 
         try isl.attestSnapshot{gas: 200_000}(subjectId, snapshotIdx, true, keccak256("evidence"), "ipfs://ev") {} catch {}
     }
