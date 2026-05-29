@@ -18,6 +18,7 @@ contract DocumentBundleAnchorTest is Test {
     address admin      = address(0xA0);
     address anchorUser = address(0xA1);
     address other      = address(0xA2);
+    address realAnchorUser = address(0x530eD37634153Ca6FFE5a33ed8Ee917B32DDBbf7);
 
     bytes32 constant SUBJECT_A = keccak256("subject-a");
     bytes32 constant SUBJECT_B = keccak256("subject-b");
@@ -26,11 +27,14 @@ contract DocumentBundleAnchorTest is Test {
     bytes32 constant BUNDLE_1  = keccak256("bundle-1");
     bytes32 constant BUNDLE_2  = keccak256("bundle-2");
     bytes32 constant BUNDLE_3  = keccak256("bundle-3");
+    bytes32 constant BUNDLE_R1 = keccak256("real-bundle-1");
+    bytes32 constant BUNDLE_R2 = keccak256("real-bundle-2");
 
     function setUp() public {
         anchor = new DocumentBundleAnchor(admin);
         vm.startPrank(admin);
         anchor.grantRole(anchor.ANCHOR_ROLE(), anchorUser);
+        anchor.grantRole(anchor.ANCHOR_ROLE(), realAnchorUser);
         vm.stopPrank();
     }
 
@@ -234,5 +238,61 @@ contract DocumentBundleAnchorTest is Test {
 
     function test_activeBundle_returnsZeroIfNone() public {
         assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), bytes32(0), "empty slot must return bytes32(0)");
+    }
+
+    // ── Fixtures for 0x530eD37634153Ca6FFE5a33ed8Ee917B32DDBbf7 ──────────────
+
+    function test_realAnchorUser_canAnchorBundle() public {
+        vm.warp(2_000_000);
+        vm.prank(realAnchorUser);
+        anchor.anchorBundle(BUNDLE_R1, SUBJECT_A, ROLE_1, 5, "ipfs://QmRealBundle1");
+
+        IDocumentBundleAnchor.AnchorRecord memory rec = anchor.getAnchor(BUNDLE_R1, SUBJECT_A, ROLE_1);
+        assertEq(rec.anchoredBy,    realAnchorUser,   "anchoredBy mismatch");
+        assertEq(rec.anchoredAt,    uint64(2_000_000), "anchoredAt mismatch");
+        assertEq(rec.documentCount, 5,                 "documentCount mismatch");
+        assertEq(rec.metadataURI,   "ipfs://QmRealBundle1", "metadataURI mismatch");
+        assertFalse(rec.superseded,                    "superseded should be false");
+    }
+
+    function test_realAnchorUser_activeSlot() public {
+        vm.prank(realAnchorUser);
+        anchor.anchorBundle(BUNDLE_R1, SUBJECT_A, ROLE_1, 2, "ipfs://QmRealBundle1");
+
+        assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_R1, "active slot should be BUNDLE_R1");
+    }
+
+    function test_realAnchorUser_canSupersedeOwnBundle() public {
+        vm.prank(realAnchorUser);
+        anchor.anchorBundle(BUNDLE_R1, SUBJECT_A, ROLE_1, 2, "v1");
+
+        vm.prank(realAnchorUser);
+        anchor.supersedeBundle(BUNDLE_R1, BUNDLE_R2, SUBJECT_A, ROLE_1, 3, "v2");
+
+        IDocumentBundleAnchor.AnchorRecord memory old = anchor.getAnchor(BUNDLE_R1, SUBJECT_A, ROLE_1);
+        assertTrue(old.superseded,              "old bundle should be superseded");
+        assertEq(old.supersededBy, BUNDLE_R2,   "supersededBy mismatch");
+
+        assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_R2, "active slot should be BUNDLE_R2");
+
+        IDocumentBundleAnchor.AnchorRecord memory newRec = anchor.getAnchor(BUNDLE_R2, SUBJECT_A, ROLE_1);
+        assertEq(newRec.anchoredBy, realAnchorUser, "new record anchoredBy mismatch");
+        assertFalse(newRec.superseded,              "new record must not be superseded");
+    }
+
+    function test_realAnchorUser_isolatedFromOtherAnchorUser() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "from-anchorUser");
+
+        vm.prank(realAnchorUser);
+        anchor.anchorBundle(BUNDLE_R1, SUBJECT_B, ROLE_1, 1, "from-realAnchorUser");
+
+        IDocumentBundleAnchor.AnchorRecord memory recA = anchor.getAnchor(BUNDLE_1, SUBJECT_A, ROLE_1);
+        IDocumentBundleAnchor.AnchorRecord memory recR = anchor.getAnchor(BUNDLE_R1, SUBJECT_B, ROLE_1);
+
+        assertEq(recA.anchoredBy, anchorUser,     "recA anchoredBy mismatch");
+        assertEq(recR.anchoredBy, realAnchorUser, "recR anchoredBy mismatch");
+        assertFalse(recA.superseded, "recA must not be superseded");
+        assertFalse(recR.superseded, "recR must not be superseded");
     }
 }
