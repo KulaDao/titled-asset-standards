@@ -132,3 +132,38 @@ jobs:
           name: gas-snapshot-${{ matrix.package }}
           path: packages/${{ matrix.package }}/.gas-snapshot
           if-no-files-found: ignore
+
+  medusa-fuzz:
+    name: Medusa Fuzz (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - eip-3-document-bundle
+          - eip-4-impact-snapshot
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install Medusa
+        run: |
+          MEDUSA_VERSION=$(curl -s https://api.github.com/repos/crytic/medusa/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          curl -sSfL "https://github.com/crytic/medusa/releases/download/${MEDUSA_VERSION}/medusa-linux-x64.tar.gz" | tar -xz
+          sudo mv medusa /usr/local/bin/medusa
+          medusa --version
+          pip install crytic-compile
+
+      - name: Build contracts
+        working-directory: packages/${{ matrix.package }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: forge install && forge build
+
+      - name: Run Medusa invariant fuzzing
+        working-directory: packages/${{ matrix.package }}
+        run: medusa fuzz --timeout 120

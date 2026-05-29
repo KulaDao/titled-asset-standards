@@ -61,6 +61,7 @@ contract ImpactSnapshotLog is
         require(periodStart < periodEnd, "ImpactSnapshotLog: periodStart must be < periodEnd");
 
         snapshotIndex = _snapshots[subjectId].length;
+        bytes32 periodKey = keccak256(abi.encodePacked(periodStart, periodEnd));
 
         if (correctsIndex != NO_CORRECTION) {
             require(
@@ -81,6 +82,18 @@ contract ImpactSnapshotLog is
             // correctedByIndex == 0 is also the zero-value; we disambiguate using the
             // snapshotIndex itself: index 0 can never correct another snapshot at index 0.
             target.correctedByIndex = snapshotIndex;
+        } else {
+            require(
+                !_periodSlotSet[subjectId][indicatorId][periodKey],
+                "ImpactSnapshotLog: period slot occupied, use correctsIndex"
+            );
+        }
+
+        if (_methodologyInitialized[subjectId][indicatorId]) {
+            require(
+                methodologyHash == _activeMethodologyHash[subjectId][indicatorId],
+                "ImpactSnapshotLog: methodologyHash must match active methodology"
+            );
         }
 
         _snapshots[subjectId].push(IndicatorSnapshot({
@@ -101,7 +114,6 @@ contract ImpactSnapshotLog is
 
         _indicatorIndices[subjectId][indicatorId].push(snapshotIndex);
 
-        bytes32 periodKey = keccak256(abi.encodePacked(periodStart, periodEnd));
         _periodSlot[subjectId][indicatorId][periodKey] = snapshotIndex;
         _periodSlotSet[subjectId][indicatorId][periodKey] = true;
 
@@ -197,6 +209,10 @@ contract ImpactSnapshotLog is
             snapshotIndex < _snapshots[subjectId].length,
             "ImpactSnapshotLog: snapshotIndex out of range"
         );
+        require(
+            _snapshots[subjectId][snapshotIndex].reportedBy != msg.sender,
+            "ImpactSnapshotLog: reporter cannot self-attest"
+        );
 
         attestationIndex = _attestations[subjectId][snapshotIndex].length;
         _attestations[subjectId][snapshotIndex].push(Attestation({
@@ -239,12 +255,16 @@ contract ImpactSnapshotLog is
         uint256         effectiveFromOrdinal
     ) external onlyRole(REPORTER_ROLE) {
         require(
+            _methodologyInitialized[subjectId][indicatorId],
+            "ImpactSnapshotLog: methodology not yet initialized"
+        );
+        require(
             _activeMethodologyHash[subjectId][indicatorId] == oldMethodologyHash,
             "ImpactSnapshotLog: oldMethodologyHash does not match active methodology"
         );
         require(
-            effectiveFromOrdinal >= _indicatorIndices[subjectId][indicatorId].length,
-            "ImpactSnapshotLog: effectiveFromOrdinal must be >= current indicatorSnapshotCount"
+            effectiveFromOrdinal == _indicatorIndices[subjectId][indicatorId].length,
+            "ImpactSnapshotLog: effectiveFromOrdinal must equal current indicatorSnapshotCount"
         );
 
         _activeMethodologyHash[subjectId][indicatorId] = newMethodologyHash;

@@ -438,7 +438,7 @@ contract ImpactSnapshotLogTest is Test {
         _record(SUBJECT_A, CARBON_OFFSET, T1, T2, NO_CORRECTION); // ordinal count = 2
 
         vm.prank(reporter);
-        vm.expectRevert("ImpactSnapshotLog: effectiveFromOrdinal must be >= current indicatorSnapshotCount");
+        vm.expectRevert("ImpactSnapshotLog: effectiveFromOrdinal must equal current indicatorSnapshotCount");
         isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "ipfs://v2", 1);
     }
 
@@ -480,5 +480,65 @@ contract ImpactSnapshotLogTest is Test {
         assertEq(UNIT_PERSONS,  keccak256("persons"),  "UNIT_PERSONS mismatch");
         assertEq(UNIT_HECTARES, keccak256("hectares"), "UNIT_HECTARES mismatch");
         assertEq(UNIT_TONNES,   keccak256("tonnes"),   "UNIT_TONNES mismatch");
+    }
+
+    // -------------------------------------------------------------------------
+    // 31. P1.1 — duplicate originals rejected
+    // -------------------------------------------------------------------------
+    function test_recordSnapshot_revertsDuplicateOriginal() public {
+        _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION);
+
+        vm.prank(reporter);
+        vm.expectRevert("ImpactSnapshotLog: period slot occupied, use correctsIndex");
+        isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 200, 2, UNIT_TCO2E, T0, T1, METHOD_1, "ipfs://v1", NO_CORRECTION);
+    }
+
+    // -------------------------------------------------------------------------
+    // 32. P1.2 — active methodology enforced for new snapshots
+    // -------------------------------------------------------------------------
+    function test_recordSnapshot_revertsMethodologyMismatch() public {
+        _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION);
+
+        vm.prank(reporter);
+        isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "ipfs://v2", 1);
+
+        vm.prank(reporter);
+        vm.expectRevert("ImpactSnapshotLog: methodologyHash must match active methodology");
+        isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 100, 2, UNIT_TCO2E, T1, T2, METHOD_1, "ipfs://v1", NO_CORRECTION);
+    }
+
+    // -------------------------------------------------------------------------
+    // 33. P1.3 — effectiveFromOrdinal must equal count, not merely >=
+    // -------------------------------------------------------------------------
+    function test_supersedeMethodology_revertsOrdinalAheadOfCount() public {
+        _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION); // count = 1
+
+        vm.prank(reporter);
+        vm.expectRevert("ImpactSnapshotLog: effectiveFromOrdinal must equal current indicatorSnapshotCount");
+        isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "ipfs://v2", 5);
+    }
+
+    // -------------------------------------------------------------------------
+    // 34. P2.1 — supersedeMethodology rejected before methodology initialized
+    // -------------------------------------------------------------------------
+    function test_supersedeMethodology_revertsBeforeInit() public {
+        vm.prank(reporter);
+        vm.expectRevert("ImpactSnapshotLog: methodology not yet initialized");
+        isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, bytes32(0), METHOD_1, "ipfs://v1", 0);
+    }
+
+    // -------------------------------------------------------------------------
+    // 35. P2.2 — reporter cannot self-attest their own snapshot
+    // -------------------------------------------------------------------------
+    function test_attestSnapshot_revertsSelfAttestation() public {
+        _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION);
+
+        vm.startPrank(admin);
+        isl.grantRole(isl.ATTESTOR_ROLE(), reporter);
+        vm.stopPrank();
+
+        vm.prank(reporter);
+        vm.expectRevert("ImpactSnapshotLog: reporter cannot self-attest");
+        isl.attestSnapshot(SUBJECT_A, 0, true, EVIDENCE, "");
     }
 }
