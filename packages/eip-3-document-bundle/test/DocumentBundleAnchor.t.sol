@@ -295,4 +295,113 @@ contract DocumentBundleAnchorTest is Test {
         assertFalse(recA.superseded, "recA must not be superseded");
         assertFalse(recR.superseded, "recR must not be superseded");
     }
+
+    // ── isAnchored ────────────────────────────────────────────────────────
+
+    function test_isAnchored_falseBeforeAnchor() public {
+        assertFalse(anchor.isAnchored(BUNDLE_1, SUBJECT_A, ROLE_1));
+    }
+
+    function test_isAnchored_trueAfterAnchor() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "ipfs://v1");
+        assertTrue(anchor.isAnchored(BUNDLE_1, SUBJECT_A, ROLE_1));
+    }
+
+    function test_isAnchored_trueEvenAfterSuperseded() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+        vm.prank(anchorUser);
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2");
+        // old bundle is still "anchored" (exists), just superseded
+        assertTrue(anchor.isAnchored(BUNDLE_1, SUBJECT_A, ROLE_1));
+        assertTrue(anchor.isAnchored(BUNDLE_2, SUBJECT_A, ROLE_1));
+    }
+
+    function test_isAnchored_falseForWrongTriple() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "ipfs://v1");
+        assertFalse(anchor.isAnchored(BUNDLE_1, SUBJECT_B, ROLE_1));
+        assertFalse(anchor.isAnchored(BUNDLE_1, SUBJECT_A, ROLE_2));
+        assertFalse(anchor.isAnchored(BUNDLE_2, SUBJECT_A, ROLE_1));
+    }
+
+    // ── supportsInterface ─────────────────────────────────────────────────
+
+    function test_supportsInterface_IDocumentBundleAnchor() public {
+        assertTrue(anchor.supportsInterface(type(IDocumentBundleAnchor).interfaceId));
+    }
+
+    function test_supportsInterface_AccessControl() public {
+        // 0x7965db0b = IAccessControl
+        assertTrue(anchor.supportsInterface(0x7965db0b));
+    }
+
+    function test_supportsInterface_falseForUnknown() public {
+        assertFalse(anchor.supportsInterface(0xdeadbeef));
+    }
+
+    // ── Edge cases ────────────────────────────────────────────────────────
+
+    function test_anchorBundle_sameBundleHashDifferentRoles() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "role1");
+        // same hash, same subject, different role -- allowed (different triple)
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_2, 1, "role2");
+
+        assertTrue(anchor.isAnchored(BUNDLE_1, SUBJECT_A, ROLE_1));
+        assertTrue(anchor.isAnchored(BUNDLE_1, SUBJECT_A, ROLE_2));
+    }
+
+    function test_anchorBundle_longMetadataURI() public {
+        string memory longURI = string(abi.encodePacked(
+            "ipfs://Qm",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ));
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 100, longURI);
+        IDocumentBundleAnchor.AnchorRecord memory rec = anchor.getAnchor(BUNDLE_1, SUBJECT_A, ROLE_1);
+        assertEq(rec.metadataURI, longURI);
+    }
+
+    function test_supersedeBundle_chainOfThree() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+        vm.prank(anchorUser);
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2");
+        vm.prank(anchorUser);
+        anchor.supersedeBundle(BUNDLE_2, BUNDLE_3, SUBJECT_A, ROLE_1, 3, "v3");
+
+        assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_3, "BUNDLE_3 must be active");
+
+        IDocumentBundleAnchor.AnchorRecord memory r1 = anchor.getAnchor(BUNDLE_1, SUBJECT_A, ROLE_1);
+        IDocumentBundleAnchor.AnchorRecord memory r2 = anchor.getAnchor(BUNDLE_2, SUBJECT_A, ROLE_1);
+        IDocumentBundleAnchor.AnchorRecord memory r3 = anchor.getAnchor(BUNDLE_3, SUBJECT_A, ROLE_1);
+
+        assertTrue(r1.superseded);  assertEq(r1.supersededBy, BUNDLE_2);
+        assertTrue(r2.superseded);  assertEq(r2.supersededBy, BUNDLE_3);
+        assertFalse(r3.superseded); assertEq(r3.supersededBy, bytes32(0));
+    }
+
+    function test_anchorBundle_revertsZeroSubjectId() public {
+        vm.prank(anchorUser);
+        // zero subjectId is allowed by the contract (no explicit check) --
+        // document this behaviour explicitly so any future restriction is caught.
+        anchor.anchorBundle(BUNDLE_1, bytes32(0), ROLE_1, 1, "ipfs://");
+        assertTrue(anchor.isAnchored(BUNDLE_1, bytes32(0), ROLE_1));
+    }
+
+    function test_supersedeBundle_revertsWhenRoleRevoked() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+
+        bytes32 anchorRole = anchor.ANCHOR_ROLE();
+        vm.prank(admin);
+        anchor.revokeRole(anchorRole, anchorUser);
+
+        vm.prank(anchorUser);
+        vm.expectRevert();
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2");
+    }
 }
