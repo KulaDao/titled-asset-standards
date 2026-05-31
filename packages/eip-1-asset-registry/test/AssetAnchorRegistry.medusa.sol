@@ -31,10 +31,9 @@ contract AssetAnchorRegistryFuzzTest {
     uint64    internal _ts = 1_000;
 
     constructor() {
-        registry = new AssetAnchorRegistry(admin);
-
-        bytes32 registrarRole = registry.REGISTRAR_ROLE();
-        registry.grantRole(registrarRole, registrar);
+        // Deploy with address(this) as admin so the harness itself holds
+        // DEFAULT_ADMIN_ROLE and REGISTRAR_ROLE and can call all registry functions.
+        registry = new AssetAnchorRegistry(address(this));
 
         tokens.push(address(0xC001));
         tokens.push(address(0xC002));
