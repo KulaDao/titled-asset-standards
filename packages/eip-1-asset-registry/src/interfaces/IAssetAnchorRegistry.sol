@@ -81,4 +81,10 @@ interface IAssetAnchorRegistry {
     ///      field. A deactivated anchor is still bound. Consumers checking operational status
     ///      SHOULD call isAnchorActive() on the token contract, not isBound() on the registry.
     function isBound(bytes32 anchorId) external view returns (bool);
+
+    /// @notice Returns false if the anchor has been manually deactivated OR if
+    ///         block.timestamp > expiresAt. Manual deactivation takes precedence.
+    /// @dev Token contracts implementing IAssetBoundToken MUST delegate to this function
+    ///      when implementing isAnchorActive() / isAnchorActiveFor(tokenId).
+    function isActive(bytes32 anchorId) external view returns (bool);
 }
