@@ -93,7 +93,7 @@ contract BundleAnchorVerifier {
         _validateRoles(roles);
         for (uint256 i = 0; i < roles.length; i++) {
             if (hasActiveBundle(subjectId, roles[i])) {
-                bitmap |= (1 << i);
+                bitmap |= (uint256(1) << i);
             }
         }
     }
