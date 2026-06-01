@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {Script, console} from "forge-std/Script.sol";
 import {DocumentBundleAnchor} from "../src/reference/DocumentBundleAnchor.sol";
 import {BundleAnchorVerifier}  from "../src/reference/BundleAnchorVerifier.sol";
-import {IDocumentBundleAnchor} from "../src/interfaces/IDocumentBundleAnchor.sol";
+import {BundleHashLib} from "../src/libraries/BundleHashLib.sol";
 
 /// @notice Minimal interface for the T-REX token's compliance functions.
 interface IERC3643Compliance {
@@ -20,7 +20,7 @@ interface IERC3643Compliance {
 ///         asset anchor (EIP-1) + document bundles (EIP-2) + BundleAnchorVerifier
 ///         used as a transfer pre-check in a downstream settlement contract.
 ///
-/// Prerequisites — run ExampleERC3643Lifecycle.s.sol first (EIP-1 package):
+/// Prerequisites — deploy/register an EIP-1 asset-bound ERC-3643-style token first:
 ///   export ASSET_ANCHOR_ID=<anchorId from registerAnchor>
 ///   export TOKEN_ADDRESS=<deployed AssetBoundERC3643 address>
 ///
@@ -57,13 +57,23 @@ contract ExampleERC3643WithDocuments is Script {
 
         // 2. Anchor the three required regulatory document bundles
         //    subjectId = assetAnchorId links documents to the bond asset (EIP-1)
-        bytes32 prospectus = keccak256(abi.encode("bond-prospectus-v1", assetAnchorId));
-        bytes32 legal      = keccak256(abi.encode("bond-legal-opinion-v1", assetAnchorId));
-        bytes32 audit      = keccak256(abi.encode("bond-audit-report-v1", assetAnchorId));
+        string[] memory prospectusDocs = new string[](2);
+        prospectusDocs[0] = "bond-prospectus-v1.pdf";
+        prospectusDocs[1] = "bond-risk-factors-v1.pdf";
+        string[] memory legalDocs = new string[](1);
+        legalDocs[0] = "bond-legal-opinion-v1.pdf";
+        string[] memory auditDocs = new string[](3);
+        auditDocs[0] = "bond-audit-report-v1.pdf";
+        auditDocs[1] = "bond-custody-statement-v1.pdf";
+        auditDocs[2] = "bond-reserve-attestation-v1.pdf";
 
-        bundleAnchor.anchorBundle(prospectus, assetAnchorId, ROLE_PROSPECTUS, 2, "ipfs://QmBondProspectus");
-        bundleAnchor.anchorBundle(legal,      assetAnchorId, ROLE_LEGAL,      1, "ipfs://QmBondLegalOpinion");
-        bundleAnchor.anchorBundle(audit,      assetAnchorId, ROLE_AUDIT,      3, "ipfs://QmBondAuditReport");
+        bytes32 prospectus = _rawPdfBundle(ROLE_PROSPECTUS, prospectusDocs);
+        bytes32 legal      = _rawPdfBundle(ROLE_LEGAL, legalDocs);
+        bytes32 audit      = _rawPdfBundle(ROLE_AUDIT, auditDocs);
+
+        bundleAnchor.anchorBundle(prospectus, assetAnchorId, ROLE_PROSPECTUS, prospectusDocs.length, "ipfs://QmBondProspectus");
+        bundleAnchor.anchorBundle(legal,      assetAnchorId, ROLE_LEGAL,      legalDocs.length,      "ipfs://QmBondLegalOpinion");
+        bundleAnchor.anchorBundle(audit,      assetAnchorId, ROLE_AUDIT,      auditDocs.length,      "ipfs://QmBondAuditReport");
         console.log("Three regulatory bundles anchored against bond asset.");
 
         // 3. Deploy BundleAnchorVerifier
@@ -88,6 +98,28 @@ contract ExampleERC3643WithDocuments is Script {
         console.log("All checks pass:        ", status.allPass);
 
         vm.stopBroadcast();
+    }
+
+    function _rawPdfBundle(bytes32 role, string[] memory canonicalFilenames)
+        internal pure returns (bytes32)
+    {
+        require(canonicalFilenames.length > 0, "ExampleERC3643WithDocuments: empty bundle");
+
+        BundleHashLib.DocumentEntry[] memory entries =
+            new BundleHashLib.DocumentEntry[](canonicalFilenames.length);
+
+        for (uint256 i = 0; i < canonicalFilenames.length; i++) {
+            bytes memory nameBytes = bytes(canonicalFilenames[i]);
+            entries[i] = BundleHashLib.DocumentEntry({
+                contentHash: keccak256(nameBytes),
+                role: role,
+                mimeTypeHash: keccak256("application/pdf"),
+                filenameHash: keccak256(nameBytes),
+                normProfileId: BundleHashLib.PROFILE_RAW
+            });
+        }
+
+        return BundleHashLib.computeBundleHash(BundleHashLib.sortEntries(entries));
     }
 }
 
@@ -115,9 +147,15 @@ contract SettlementGuard {
     }
 
     constructor(address token_, address verifier_, bytes32 subjectId_) {
+        require(token_ != address(0), "SettlementGuard: zero token");
+        require(verifier_ != address(0), "SettlementGuard: zero verifier");
+        require(subjectId_ != bytes32(0), "SettlementGuard: zero subject");
+
         _token     = IERC3643Compliance(token_);
         _verifier  = BundleAnchorVerifier(verifier_);
         _subjectId = subjectId_;
+
+        require(_token.anchorId() == subjectId_, "SettlementGuard: token subject mismatch");
     }
 
     function checkCompliance(address investor) external view returns (ComplianceStatus memory s) {

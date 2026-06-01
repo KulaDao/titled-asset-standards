@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {Script, console} from "forge-std/Script.sol";
 import {DocumentBundleAnchor} from "../src/reference/DocumentBundleAnchor.sol";
 import {BundleAnchorVerifier}  from "../src/reference/BundleAnchorVerifier.sol";
-import {IDocumentBundleAnchor} from "../src/interfaces/IDocumentBundleAnchor.sol";
+import {BundleHashLib} from "../src/libraries/BundleHashLib.sol";
 
 /// @notice Minimal EIP-1 registry interface — only what this script needs.
 interface IAssetRegistry {
@@ -15,9 +15,10 @@ interface IAssetRegistry {
 /// @notice Shows how compliance document bundles are anchored against an
 ///         ERC-20 asset-bound token using EIP-1 + EIP-2 together.
 ///
-/// Prerequisites — run ExampleERC20Lifecycle.s.sol first (EIP-1 package):
+/// Prerequisites — deploy/register an EIP-1 asset anchor first:
 ///   export REGISTRY_ADDRESS=<deployed AssetAnchorRegistry address>
 ///   export ASSET_ANCHOR_ID=<anchorId returned by registerAnchor>
+///   export COMPLIANCE_PRIVATE_KEY=<optional key that should anchor documents>
 ///
 /// Then run this script:
 ///   forge script script/ExampleERC20WithDocuments.s.sol \
@@ -43,11 +44,30 @@ contract ExampleERC20WithDocuments is Script {
         address deployer       = vm.addr(deployerKey);
         address registry       = vm.envAddress("REGISTRY_ADDRESS");
         bytes32 assetAnchorId  = vm.envBytes32("ASSET_ANCHOR_ID");
-        address compliance     = vm.envOr("COMPLIANCE_OFFICER", deployer);
+        uint256 complianceKey  = vm.envOr("COMPLIANCE_PRIVATE_KEY", deployerKey);
+        address compliance     = vm.addr(complianceKey);
 
-        // Simulate two document bundles (hash of their content fingerprints)
-        bytes32 legalBundle = keccak256(abi.encode("legal-basis-bundle-v1", assetAnchorId));
-        bytes32 ddBundle    = keccak256(abi.encode("due-diligence-bundle-v1", assetAnchorId));
+        require(
+            IAssetRegistry(registry).isActive(assetAnchorId),
+            "ExampleERC20WithDocuments: EIP-1 anchor inactive"
+        );
+
+        // Demo bundle hashes still use placeholder document bytes, but the
+        // manifest shape, fields, sorting, and schema prefix are EIP-2 canonical.
+        string[] memory legalDocs = new string[](3);
+        legalDocs[0] = "title-deed-v1.pdf";
+        legalDocs[1] = "legal-opinion-v1.pdf";
+        legalDocs[2] = "prospectus-v1.pdf";
+
+        string[] memory dueDiligenceDocs = new string[](5);
+        dueDiligenceDocs[0] = "valuation-v1.pdf";
+        dueDiligenceDocs[1] = "audit-v1.pdf";
+        dueDiligenceDocs[2] = "kyc-summary-v1.pdf";
+        dueDiligenceDocs[3] = "aml-summary-v1.pdf";
+        dueDiligenceDocs[4] = "risk-assessment-v1.pdf";
+
+        bytes32 legalBundle = _rawPdfBundle(ROLE_LEGAL_BASIS, legalDocs);
+        bytes32 ddBundle    = _rawPdfBundle(ROLE_DUE_DILIGENCE, dueDiligenceDocs);
 
         vm.startBroadcast(deployerKey);
 
@@ -62,7 +82,10 @@ contract ExampleERC20WithDocuments is Script {
             console.log("ANCHOR_ROLE granted to compliance officer");
         }
 
+        vm.stopBroadcast();
+
         // 3. Anchor legal basis documents (subjectId = EIP-1 assetAnchorId)
+        vm.startBroadcast(complianceKey);
         anchor.anchorBundle(
             legalBundle,
             assetAnchorId,      // links this bundle to the EIP-1 asset
@@ -83,8 +106,10 @@ contract ExampleERC20WithDocuments is Script {
         );
         console.log("Due diligence bundle anchored:");
         console.logBytes32(ddBundle);
+        vm.stopBroadcast();
 
         // 5. Deploy BundleAnchorVerifier for downstream compliance checks
+        vm.startBroadcast(deployerKey);
         BundleAnchorVerifier verifier = new BundleAnchorVerifier(address(anchor));
         console.log("BundleAnchorVerifier:", address(verifier));
 
@@ -109,5 +134,27 @@ contract ExampleERC20WithDocuments is Script {
         console.log("The verifier can be used by downstream contracts as:");
         console.log("  verifier.requireActiveBundle(assetAnchorId, ROLE_LEGAL_BASIS)");
         console.log("  verifier.requireActiveBundlesForAllRoles(assetAnchorId, roles)");
+    }
+
+    function _rawPdfBundle(bytes32 role, string[] memory canonicalFilenames)
+        internal pure returns (bytes32)
+    {
+        require(canonicalFilenames.length > 0, "ExampleERC20WithDocuments: empty bundle");
+
+        BundleHashLib.DocumentEntry[] memory entries =
+            new BundleHashLib.DocumentEntry[](canonicalFilenames.length);
+
+        for (uint256 i = 0; i < canonicalFilenames.length; i++) {
+            bytes memory nameBytes = bytes(canonicalFilenames[i]);
+            entries[i] = BundleHashLib.DocumentEntry({
+                contentHash: keccak256(nameBytes),
+                role: role,
+                mimeTypeHash: keccak256("application/pdf"),
+                filenameHash: keccak256(nameBytes),
+                normProfileId: BundleHashLib.PROFILE_RAW
+            });
+        }
+
+        return BundleHashLib.computeBundleHash(BundleHashLib.sortEntries(entries));
     }
 }

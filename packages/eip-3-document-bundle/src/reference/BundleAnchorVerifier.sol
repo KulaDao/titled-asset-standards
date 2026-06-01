@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IDocumentBundleAnchor} from "../interfaces/IDocumentBundleAnchor.sol";
 
 /// @title  BundleAnchorVerifier
@@ -24,9 +25,24 @@ contract BundleAnchorVerifier {
 
     error NoBundleActive(bytes32 subjectId, bytes32 role);
     error BundleNotCurrent(bytes32 bundleHash, bytes32 subjectId, bytes32 role);
+    error EmptyRoleSet();
+    error DuplicateRole(bytes32 role);
+    error TooManyRoles(uint256 count);
 
     constructor(address registry_) {
         require(registry_ != address(0), "BundleAnchorVerifier: zero registry");
+        require(registry_.code.length > 0, "BundleAnchorVerifier: registry not contract");
+
+        (bool ok, bytes memory data) = registry_.staticcall(
+            abi.encodeWithSelector(IERC165.supportsInterface.selector, type(IDocumentBundleAnchor).interfaceId)
+        );
+        if (ok) {
+            require(
+                data.length == 32 && abi.decode(data, (bool)),
+                "BundleAnchorVerifier: unsupported registry"
+            );
+        }
+
         _registry = IDocumentBundleAnchor(registry_);
     }
 
@@ -39,7 +55,8 @@ contract BundleAnchorVerifier {
 
     /// @notice Returns true if subjectId has a current (non-zero) active bundle for role.
     function hasActiveBundle(bytes32 subjectId, bytes32 role) public view returns (bool) {
-        return _registry.activeBundle(subjectId, role) != bytes32(0);
+        (bool current,,) = _activeRecord(subjectId, role);
+        return current;
     }
 
     /// @notice Returns the active bundle hash, or bytes32(0) if none exists.
@@ -52,16 +69,18 @@ contract BundleAnchorVerifier {
     function isBundleCurrent(bytes32 bundleHash, bytes32 subjectId, bytes32 role)
         public view returns (bool)
     {
-        bytes32 active = _registry.activeBundle(subjectId, role);
-        return active != bytes32(0) && active == bundleHash;
+        (bool current, bytes32 active,) = _activeRecord(subjectId, role);
+        return current && active == bundleHash;
     }
 
     /// @notice Returns true only if ALL roles have an active bundle for subjectId.
+    /// @dev Reverts for empty, duplicate, or more-than-256 role sets.
     function hasActiveBundlesForAllRoles(bytes32 subjectId, bytes32[] calldata roles)
         public view returns (bool)
     {
+        _validateRoles(roles);
         for (uint256 i = 0; i < roles.length; i++) {
-            if (_registry.activeBundle(subjectId, roles[i]) == bytes32(0)) return false;
+            if (!hasActiveBundle(subjectId, roles[i])) return false;
         }
         return true;
     }
@@ -71,9 +90,9 @@ contract BundleAnchorVerifier {
     function activeBundleBitmap(bytes32 subjectId, bytes32[] calldata roles)
         public view returns (uint256 bitmap)
     {
-        require(roles.length <= 256, "BundleAnchorVerifier: too many roles");
+        _validateRoles(roles);
         for (uint256 i = 0; i < roles.length; i++) {
-            if (_registry.activeBundle(subjectId, roles[i]) != bytes32(0)) {
+            if (hasActiveBundle(subjectId, roles[i])) {
                 bitmap |= (1 << i);
             }
         }
@@ -86,7 +105,17 @@ contract BundleAnchorVerifier {
     {
         bytes32 bundleHash = _registry.activeBundle(subjectId, role);
         if (bundleHash == bytes32(0)) revert NoBundleActive(subjectId, role);
-        return _registry.getAnchor(bundleHash, subjectId, role);
+        IDocumentBundleAnchor.AnchorRecord memory record;
+        try _registry.getAnchor(bundleHash, subjectId, role) returns (IDocumentBundleAnchor.AnchorRecord memory fetched) {
+            record = fetched;
+        } catch {
+            revert BundleNotCurrent(bundleHash, subjectId, role);
+        }
+
+        if (!_isCurrentRecord(record, bundleHash, subjectId, role)) {
+            revert BundleNotCurrent(bundleHash, subjectId, role);
+        }
+        return record;
     }
 
     // ── Guard functions ───────────────────────────────────────────────────
@@ -94,7 +123,7 @@ contract BundleAnchorVerifier {
     /// @notice Reverts if subjectId has no active bundle for role.
     ///         Use in business logic as a compliance pre-check.
     function requireActiveBundle(bytes32 subjectId, bytes32 role) public view {
-        if (_registry.activeBundle(subjectId, role) == bytes32(0)) {
+        if (!hasActiveBundle(subjectId, role)) {
             revert NoBundleActive(subjectId, role);
         }
     }
@@ -107,10 +136,55 @@ contract BundleAnchorVerifier {
     }
 
     /// @notice Reverts unless ALL roles have an active bundle for subjectId.
+    /// @dev Reverts for empty, duplicate, or more-than-256 role sets.
     function requireActiveBundlesForAllRoles(bytes32 subjectId, bytes32[] calldata roles) public view {
+        _validateRoles(roles);
         for (uint256 i = 0; i < roles.length; i++) {
-            if (_registry.activeBundle(subjectId, roles[i]) == bytes32(0)) {
+            if (!hasActiveBundle(subjectId, roles[i])) {
                 revert NoBundleActive(subjectId, roles[i]);
+            }
+        }
+    }
+
+    function _activeRecord(bytes32 subjectId, bytes32 role)
+        internal view returns (
+            bool current,
+            bytes32 active,
+            IDocumentBundleAnchor.AnchorRecord memory record
+        )
+    {
+        active = _registry.activeBundle(subjectId, role);
+        if (active == bytes32(0)) return (false, active, record);
+
+        try _registry.getAnchor(active, subjectId, role) returns (IDocumentBundleAnchor.AnchorRecord memory fetched) {
+            record = fetched;
+            current = _isCurrentRecord(record, active, subjectId, role);
+        } catch {
+            current = false;
+        }
+    }
+
+    function _isCurrentRecord(
+        IDocumentBundleAnchor.AnchorRecord memory record,
+        bytes32 bundleHash,
+        bytes32 subjectId,
+        bytes32 role
+    ) internal pure returns (bool) {
+        return record.bundleHash == bundleHash
+            && record.subjectId == subjectId
+            && record.role == role
+            && record.anchoredAt != 0
+            && record.documentCount > 0
+            && !record.superseded;
+    }
+
+    function _validateRoles(bytes32[] calldata roles) internal pure {
+        if (roles.length == 0) revert EmptyRoleSet();
+        if (roles.length > 256) revert TooManyRoles(roles.length);
+
+        for (uint256 i = 0; i < roles.length; i++) {
+            for (uint256 j = i + 1; j < roles.length; j++) {
+                if (roles[i] == roles[j]) revert DuplicateRole(roles[i]);
             }
         }
     }
