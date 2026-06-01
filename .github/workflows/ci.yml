@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - eip-1-asset-registry
+          - eip-2-document-bundle
+          - eip-3-transfer-domain
+          - eip-4-compliance-event
+          - eip-5-impact-snapshot
+          - eip-6-nav-oracle
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Cache Foundry artifacts
+        uses: actions/cache@v4
+        with:
+          path: packages/${{ matrix.package }}/out
+          key: foundry-${{ matrix.package }}-${{ hashFiles(format('packages/{0}/src/**/*.sol', matrix.package)) }}
+          restore-keys: foundry-${{ matrix.package }}-
+
+      - name: Build & test
+        working-directory: packages/${{ matrix.package }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! ls src/interfaces/*.sol 2>/dev/null | grep -q .; then
+            echo "No contracts yet, skipping"
+            exit 0
+          fi
+          forge install
+          forge build --sizes
+          forge test -vvv
+
+  static-analysis:
+    name: Slither (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - eip-1-asset-registry
+          - eip-2-document-bundle
+          - eip-3-transfer-domain
+          - eip-4-compliance-event
+          - eip-5-impact-snapshot
+          - eip-6-nav-oracle
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Check for contracts
+        id: check
+        working-directory: packages/${{ matrix.package }}
+        run: |
+          if ls src/interfaces/*.sol 2>/dev/null | grep -q .; then
+            echo "has_contracts=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_contracts=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Slither
+        if: steps.check.outputs.has_contracts == 'true'
+        uses: crytic/slither-action@v0.4.0
+        with:
+          target: packages/${{ matrix.package }}
+          fail-on: high
+
+      - name: No contracts, skipping
+        if: steps.check.outputs.has_contracts == 'false'
+        run: echo "No contracts yet, skipping"
+
+  gas-snapshot:
+    name: Gas Snapshot (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - eip-1-asset-registry
+          - eip-2-document-bundle
+          - eip-3-transfer-domain
+          - eip-4-compliance-event
+          - eip-5-impact-snapshot
+          - eip-6-nav-oracle
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Cache Foundry artifacts
+        uses: actions/cache@v4
+        with:
+          path: packages/${{ matrix.package }}/out
+          key: foundry-${{ matrix.package }}-${{ hashFiles(format('packages/{0}/src/**/*.sol', matrix.package)) }}
+          restore-keys: foundry-${{ matrix.package }}-
+
+      - name: Gas snapshot
+        working-directory: packages/${{ matrix.package }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! ls src/interfaces/*.sol 2>/dev/null | grep -q .; then
+            echo "No contracts yet, skipping"
+            exit 0
+          fi
+          forge install
+          forge snapshot
+
+      - name: Upload gas snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gas-snapshot-${{ matrix.package }}
+          path: packages/${{ matrix.package }}/.gas-snapshot
+          if-no-files-found: ignore
+
+  medusa-fuzz:
+    name: Medusa Fuzz (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - eip-2-document-bundle
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install Medusa
+        run: |
+          MEDUSA_VERSION=$(curl -s https://api.github.com/repos/crytic/medusa/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          curl -sSfL "https://github.com/crytic/medusa/releases/download/${MEDUSA_VERSION}/medusa-linux-x64.tar.gz" | tar -xz
+          sudo mv medusa /usr/local/bin/medusa
+          medusa --version
+          pip install crytic-compile
+
+      - name: Build contracts
+        working-directory: packages/${{ matrix.package }}
+        run: forge build
+
+      - name: Run Medusa invariant fuzzing
+        working-directory: packages/${{ matrix.package }}
+        run: medusa fuzz --timeout 120

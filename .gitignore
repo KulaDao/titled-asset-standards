@@ -1,6 +1,31 @@
 # Foundry build artifacts and cache
 out/
 cache/
+.gas-snapshot
+
+# Foundry deployment records
+broadcast/
+
+# Slither output
+*.dot
+*.sarif
+slither_results.json
+
+# Medusa fuzz artifacts
+corpus/
+crytic-export/
+
+# Environment files
+.env
+.env.*
+!.env.example
 
 # macOS
 .DS_Store
+.DS_Store?
+._*
+
+# AI planning docs
+docs/superpowers/
+.serena
+.claude
