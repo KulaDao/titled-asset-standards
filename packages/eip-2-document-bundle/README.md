@@ -1,4 +1,4 @@
-# eip-3-document-bundle
+# eip-2-document-bundle
 
 On-chain anchor that binds a deterministic bundle hash (derived from a set of document entries) to a `(subjectId, role)` namespace, with full lifecycle management and permanent supersession history.
 
@@ -90,7 +90,7 @@ require(recomputed == active);
 ## Build & Test
 
 ```bash
-cd packages/eip-3-document-bundle
+cd packages/eip-2-document-bundle
 
 forge build
 forge test                          # 28 unit tests
