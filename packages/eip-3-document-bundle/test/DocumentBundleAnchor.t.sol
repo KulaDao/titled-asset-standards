@@ -6,6 +6,9 @@ import {DocumentBundleAnchor} from "../src/reference/DocumentBundleAnchor.sol";
 import {IDocumentBundleAnchor} from "../src/interfaces/IDocumentBundleAnchor.sol";
 
 contract DocumentBundleAnchorTest is Test {
+    bytes4 constant ACCESS_CONTROL_UNAUTHORIZED =
+        bytes4(keccak256("AccessControlUnauthorizedAccount(address,bytes32)"));
+
     event BundleAnchored(
         bytes32 indexed bundleHash,
         bytes32 indexed subjectId,
@@ -313,7 +316,7 @@ contract DocumentBundleAnchorTest is Test {
         anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
         vm.prank(anchorUser);
         anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2");
-        // old bundle is still "anchored" (exists), just superseded
+
         assertTrue(anchor.isAnchored(BUNDLE_1, SUBJECT_A, ROLE_1));
         assertTrue(anchor.isAnchored(BUNDLE_2, SUBJECT_A, ROLE_1));
     }
@@ -333,7 +336,6 @@ contract DocumentBundleAnchorTest is Test {
     }
 
     function test_supportsInterface_AccessControl() public {
-        // 0x7965db0b = IAccessControl
         assertTrue(anchor.supportsInterface(0x7965db0b));
     }
 
@@ -346,7 +348,6 @@ contract DocumentBundleAnchorTest is Test {
     function test_anchorBundle_sameBundleHashDifferentRoles() public {
         vm.prank(anchorUser);
         anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "role1");
-        // same hash, same subject, different role -- allowed (different triple)
         vm.prank(anchorUser);
         anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_2, 1, "role2");
 
@@ -384,15 +385,13 @@ contract DocumentBundleAnchorTest is Test {
         assertFalse(r3.superseded); assertEq(r3.supersededBy, bytes32(0));
     }
 
-    function test_anchorBundle_revertsZeroSubjectId() public {
+    function test_anchorBundle_allowsZeroSubjectIdAsStandaloneNamespace() public {
         vm.prank(anchorUser);
-        // zero subjectId is allowed by the contract (no explicit check) --
-        // document this behaviour explicitly so any future restriction is caught.
         anchor.anchorBundle(BUNDLE_1, bytes32(0), ROLE_1, 1, "ipfs://");
         assertTrue(anchor.isAnchored(BUNDLE_1, bytes32(0), ROLE_1));
     }
 
-    function test_supersedeBundle_revertsWhenRoleRevoked() public {
+    function test_supersedeBundle_revertsWhenAnchorRoleRevoked() public {
         vm.prank(anchorUser);
         anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
 
@@ -401,7 +400,28 @@ contract DocumentBundleAnchorTest is Test {
         anchor.revokeRole(anchorRole, anchorUser);
 
         vm.prank(anchorUser);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(ACCESS_CONTROL_UNAUTHORIZED, anchorUser, anchorRole));
         anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2");
+
+        IDocumentBundleAnchor.AnchorRecord memory old = anchor.getAnchor(BUNDLE_1, SUBJECT_A, ROLE_1);
+        assertFalse(old.superseded, "old bundle must remain active");
+        assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_1, "active slot must not change");
+    }
+
+    function test_supersedeBundle_adminWithoutAnchorRoleCannotSupersede() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+
+        bytes32 anchorRole = anchor.ANCHOR_ROLE();
+        vm.prank(admin);
+        anchor.revokeRole(anchorRole, admin);
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(ACCESS_CONTROL_UNAUTHORIZED, admin, anchorRole));
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2");
+
+        IDocumentBundleAnchor.AnchorRecord memory old = anchor.getAnchor(BUNDLE_1, SUBJECT_A, ROLE_1);
+        assertFalse(old.superseded, "old bundle must remain active");
+        assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_1, "active slot must not change");
     }
 }

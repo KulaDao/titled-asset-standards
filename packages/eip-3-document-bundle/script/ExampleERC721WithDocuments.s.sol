@@ -4,13 +4,14 @@ pragma solidity ^0.8.24;
 import {Script, console} from "forge-std/Script.sol";
 import {DocumentBundleAnchor} from "../src/reference/DocumentBundleAnchor.sol";
 import {BundleAnchorVerifier}  from "../src/reference/BundleAnchorVerifier.sol";
+import {BundleHashLib} from "../src/libraries/BundleHashLib.sol";
 
 /// @title  ExampleERC721WithDocuments
 /// @notice Shows how per-token ERC-721 assets each get their own independent
 ///         document bundle. Each NFT's EIP-1 anchorId is the subjectId for
 ///         its EIP-2 document bundles.
 ///
-/// Prerequisites — run ExampleERC721Lifecycle.s.sol first (EIP-1 package):
+/// Prerequisites — deploy/register per-token EIP-1 asset anchors first:
 ///   export ANCHOR_A=<anchorId for property A (NYC Office)>
 ///   export ANCHOR_B=<anchorId for property B (London Warehouse)>
 ///
@@ -45,19 +46,35 @@ contract ExampleERC721WithDocuments is Script {
         console.log("BundleAnchorVerifier:", address(verifier));
 
         // 2. Anchor documents for property A (NYC Office) — token #1
-        bytes32 titleA = keccak256(abi.encode("nyc-title-deed-v1", anchorA));
-        bytes32 compA  = keccak256(abi.encode("nyc-compliance-pack-v1", anchorA));
+        string[] memory titleADocs = new string[](1);
+        titleADocs[0] = "nyc-title-deed-v1.pdf";
+        string[] memory compADocs = new string[](6);
+        compADocs[0] = "nyc-compliance-opinion-v1.pdf";
+        compADocs[1] = "nyc-zoning-report-v1.pdf";
+        compADocs[2] = "nyc-insurance-certificate-v1.pdf";
+        compADocs[3] = "nyc-environmental-report-v1.pdf";
+        compADocs[4] = "nyc-tax-clearance-v1.pdf";
+        compADocs[5] = "nyc-regulatory-filing-v1.pdf";
 
-        anchor.anchorBundle(titleA, anchorA, ROLE_TITLE_DEED,  1, "ipfs://QmNYCTitleDeed");
-        anchor.anchorBundle(compA,  anchorA, ROLE_COMPLIANCE,  6, "ipfs://QmNYCCompliancePack");
+        bytes32 titleA = _rawPdfBundle(ROLE_TITLE_DEED, titleADocs);
+        bytes32 compA  = _rawPdfBundle(ROLE_COMPLIANCE, compADocs);
+
+        anchor.anchorBundle(titleA, anchorA, ROLE_TITLE_DEED,  titleADocs.length, "ipfs://QmNYCTitleDeed");
+        anchor.anchorBundle(compA,  anchorA, ROLE_COMPLIANCE,  compADocs.length, "ipfs://QmNYCCompliancePack");
         console.log("Property A (NYC): title deed and compliance pack anchored");
 
         // 3. Anchor documents for property B (London Warehouse) — token #2
-        bytes32 titleB   = keccak256(abi.encode("london-title-deed-v1", anchorB));
-        bytes32 surveyB  = keccak256(abi.encode("london-survey-v1", anchorB));
+        string[] memory titleBDocs = new string[](1);
+        titleBDocs[0] = "london-title-deed-v1.pdf";
+        string[] memory surveyBDocs = new string[](2);
+        surveyBDocs[0] = "london-boundary-survey-v1.pdf";
+        surveyBDocs[1] = "london-structural-survey-v1.pdf";
 
-        anchor.anchorBundle(titleB,  anchorB, ROLE_TITLE_DEED, 1, "ipfs://QmLondonTitleDeed");
-        anchor.anchorBundle(surveyB, anchorB, ROLE_SURVEY,     2, "ipfs://QmLondonSurvey");
+        bytes32 titleB   = _rawPdfBundle(ROLE_TITLE_DEED, titleBDocs);
+        bytes32 surveyB  = _rawPdfBundle(ROLE_SURVEY, surveyBDocs);
+
+        anchor.anchorBundle(titleB,  anchorB, ROLE_TITLE_DEED, titleBDocs.length, "ipfs://QmLondonTitleDeed");
+        anchor.anchorBundle(surveyB, anchorB, ROLE_SURVEY,     surveyBDocs.length, "ipfs://QmLondonSurvey");
         console.log("Property B (London): title deed and survey anchored");
 
         // 4. Verify per-asset isolation
@@ -70,8 +87,16 @@ contract ExampleERC721WithDocuments is Script {
         console.log("Per-asset document isolation confirmed.");
 
         // 5. Supersede property A's compliance pack (updated filing)
-        bytes32 compA_v2 = keccak256(abi.encode("nyc-compliance-pack-v2", anchorA));
-        anchor.supersedeBundle(compA, compA_v2, anchorA, ROLE_COMPLIANCE, 7, "ipfs://QmNYCCompliancePackV2");
+        string[] memory compAV2Docs = new string[](7);
+        compAV2Docs[0] = "nyc-compliance-opinion-v2.pdf";
+        compAV2Docs[1] = "nyc-zoning-report-v2.pdf";
+        compAV2Docs[2] = "nyc-insurance-certificate-v2.pdf";
+        compAV2Docs[3] = "nyc-environmental-report-v2.pdf";
+        compAV2Docs[4] = "nyc-tax-clearance-v2.pdf";
+        compAV2Docs[5] = "nyc-regulatory-filing-v2.pdf";
+        compAV2Docs[6] = "nyc-board-approval-v2.pdf";
+        bytes32 compA_v2 = _rawPdfBundle(ROLE_COMPLIANCE, compAV2Docs);
+        anchor.supersedeBundle(compA, compA_v2, anchorA, ROLE_COMPLIANCE, compAV2Docs.length, "ipfs://QmNYCCompliancePackV2");
         console.log("Property A compliance pack superseded with v2.");
 
         // 6. Property B is completely unaffected
@@ -86,5 +111,27 @@ contract ExampleERC721WithDocuments is Script {
         console.log("Property A compliance pack updated to v2.");
 
         vm.stopBroadcast();
+    }
+
+    function _rawPdfBundle(bytes32 role, string[] memory canonicalFilenames)
+        internal pure returns (bytes32)
+    {
+        require(canonicalFilenames.length > 0, "ExampleERC721WithDocuments: empty bundle");
+
+        BundleHashLib.DocumentEntry[] memory entries =
+            new BundleHashLib.DocumentEntry[](canonicalFilenames.length);
+
+        for (uint256 i = 0; i < canonicalFilenames.length; i++) {
+            bytes memory nameBytes = bytes(canonicalFilenames[i]);
+            entries[i] = BundleHashLib.DocumentEntry({
+                contentHash: keccak256(nameBytes),
+                role: role,
+                mimeTypeHash: keccak256("application/pdf"),
+                filenameHash: keccak256(nameBytes),
+                normProfileId: BundleHashLib.PROFILE_RAW
+            });
+        }
+
+        return BundleHashLib.computeBundleHash(BundleHashLib.sortEntries(entries));
     }
 }

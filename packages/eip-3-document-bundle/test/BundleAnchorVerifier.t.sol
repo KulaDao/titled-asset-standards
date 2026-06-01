@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {BundleAnchorVerifier} from "../src/reference/BundleAnchorVerifier.sol";
 import {DocumentBundleAnchor} from "../src/reference/DocumentBundleAnchor.sol";
 import {IDocumentBundleAnchor} from "../src/interfaces/IDocumentBundleAnchor.sol";
@@ -9,6 +10,49 @@ import {IDocumentBundleAnchor} from "../src/interfaces/IDocumentBundleAnchor.sol
 /// @dev Concrete subclass so we can call the internal guard functions from tests.
 contract VerifierHarness is BundleAnchorVerifier {
     constructor(address reg) BundleAnchorVerifier(reg) {}
+}
+
+contract MockBundleAnchorRegistry is IDocumentBundleAnchor, IERC165 {
+    bytes32 private _active;
+    AnchorRecord private _record;
+    bool private _revertGetAnchor;
+    bool private _supportsDocumentBundleAnchor = true;
+
+    function setActive(bytes32 active) external {
+        _active = active;
+    }
+
+    function setRecord(AnchorRecord memory record) external {
+        _record = record;
+    }
+
+    function setRevertGetAnchor(bool revertGetAnchor) external {
+        _revertGetAnchor = revertGetAnchor;
+    }
+
+    function setSupportsDocumentBundleAnchor(bool supportsDocumentBundleAnchor) external {
+        _supportsDocumentBundleAnchor = supportsDocumentBundleAnchor;
+    }
+
+    function supportsInterface(bytes4 interfaceId) external view returns (bool) {
+        return _supportsDocumentBundleAnchor && interfaceId == type(IDocumentBundleAnchor).interfaceId;
+    }
+
+    function anchorBundle(bytes32, bytes32, bytes32, uint256, string calldata) external {}
+    function supersedeBundle(bytes32, bytes32, bytes32, bytes32, uint256, string calldata) external {}
+
+    function getAnchor(bytes32, bytes32, bytes32) external view returns (AnchorRecord memory) {
+        require(!_revertGetAnchor, "mock getAnchor revert");
+        return _record;
+    }
+
+    function isAnchored(bytes32, bytes32, bytes32) external pure returns (bool) {
+        return true;
+    }
+
+    function activeBundle(bytes32, bytes32) external view returns (bytes32) {
+        return _active;
+    }
 }
 
 contract BundleAnchorVerifierTest is Test {
@@ -45,6 +89,18 @@ contract BundleAnchorVerifierTest is Test {
         new VerifierHarness(address(0));
     }
 
+    function test_constructor_revertsEOARegistry() public {
+        vm.expectRevert("BundleAnchorVerifier: registry not contract");
+        new VerifierHarness(address(0x1234));
+    }
+
+    function test_constructor_revertsUnsupportedRegistry() public {
+        MockBundleAnchorRegistry mock = new MockBundleAnchorRegistry();
+        mock.setSupportsDocumentBundleAnchor(false);
+        vm.expectRevert("BundleAnchorVerifier: unsupported registry");
+        new VerifierHarness(address(mock));
+    }
+
     function test_bundleRegistry_returnsAnchorAddress() public {
         assertEq(verifier.bundleRegistry(), address(anchor));
     }
@@ -60,12 +116,59 @@ contract BundleAnchorVerifierTest is Test {
         assertTrue(verifier.hasActiveBundle(SUBJECT, ROLE_L));
     }
 
-    function test_hasActiveBundle_falseAfterSupersede_oldHash() public {
+    function test_hasActiveBundle_trueAfterSupersede_newHashActive() public {
         _anchorBundle(BUNDLE_1, SUBJECT, ROLE_L);
         vm.prank(anchorer);
         anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT, ROLE_L, 3, "ipfs://v2");
         // BUNDLE_2 is now active; SUBJECT/ROLE_L still has an active bundle
         assertTrue(verifier.hasActiveBundle(SUBJECT, ROLE_L));
+    }
+
+    function test_hasActiveBundle_falseIfActiveRecordSuperseded() public {
+        MockBundleAnchorRegistry mock = new MockBundleAnchorRegistry();
+        mock.setActive(BUNDLE_1);
+        mock.setRecord(IDocumentBundleAnchor.AnchorRecord({
+            bundleHash: BUNDLE_1,
+            subjectId: SUBJECT,
+            role: ROLE_L,
+            anchoredBy: anchorer,
+            anchoredAt: 1,
+            documentCount: 1,
+            metadataURI: "ipfs://old",
+            superseded: true,
+            supersededBy: BUNDLE_2
+        }));
+        VerifierHarness mockVerifier = new VerifierHarness(address(mock));
+
+        assertFalse(mockVerifier.hasActiveBundle(SUBJECT, ROLE_L));
+    }
+
+    function test_hasActiveBundle_falseIfActiveRecordMismatched() public {
+        MockBundleAnchorRegistry mock = new MockBundleAnchorRegistry();
+        mock.setActive(BUNDLE_1);
+        mock.setRecord(IDocumentBundleAnchor.AnchorRecord({
+            bundleHash: BUNDLE_2,
+            subjectId: SUBJECT,
+            role: ROLE_L,
+            anchoredBy: anchorer,
+            anchoredAt: 1,
+            documentCount: 1,
+            metadataURI: "ipfs://wrong",
+            superseded: false,
+            supersededBy: bytes32(0)
+        }));
+        VerifierHarness mockVerifier = new VerifierHarness(address(mock));
+
+        assertFalse(mockVerifier.hasActiveBundle(SUBJECT, ROLE_L));
+    }
+
+    function test_hasActiveBundle_falseIfGetAnchorReverts() public {
+        MockBundleAnchorRegistry mock = new MockBundleAnchorRegistry();
+        mock.setActive(BUNDLE_1);
+        mock.setRevertGetAnchor(true);
+        VerifierHarness mockVerifier = new VerifierHarness(address(mock));
+
+        assertFalse(mockVerifier.hasActiveBundle(SUBJECT, ROLE_L));
     }
 
     // ── activeBundleFor ───────────────────────────────────────────────────
@@ -123,9 +226,17 @@ contract BundleAnchorVerifierTest is Test {
         assertFalse(verifier.hasActiveBundlesForAllRoles(SUBJECT, roles));
     }
 
-    function test_hasActiveBundlesForAllRoles_trueForEmptyArray() public {
+    function test_hasActiveBundlesForAllRoles_revertsForEmptyArray() public {
         bytes32[] memory roles = new bytes32[](0);
-        assertTrue(verifier.hasActiveBundlesForAllRoles(SUBJECT, roles));
+        vm.expectRevert(BundleAnchorVerifier.EmptyRoleSet.selector);
+        verifier.hasActiveBundlesForAllRoles(SUBJECT, roles);
+    }
+
+    function test_hasActiveBundlesForAllRoles_revertsDuplicateRole() public {
+        bytes32[] memory roles = new bytes32[](2);
+        roles[0] = ROLE_L; roles[1] = ROLE_L;
+        vm.expectRevert(abi.encodeWithSelector(BundleAnchorVerifier.DuplicateRole.selector, ROLE_L));
+        verifier.hasActiveBundlesForAllRoles(SUBJECT, roles);
     }
 
     // ── activeBundleBitmap ────────────────────────────────────────────────
@@ -147,6 +258,32 @@ contract BundleAnchorVerifierTest is Test {
         assertEq(verifier.activeBundleBitmap(SUBJECT, roles), 3); // 0b11
     }
 
+    function test_activeBundleBitmap_setsBit255() public {
+        bytes32[] memory roles = new bytes32[](256);
+        for (uint256 i = 0; i < roles.length; i++) {
+            roles[i] = bytes32(uint256(i + 1));
+        }
+
+        _anchorBundle(BUNDLE_1, SUBJECT, roles[255]);
+        assertEq(verifier.activeBundleBitmap(SUBJECT, roles), 1 << 255);
+    }
+
+    function test_activeBundleBitmap_revertsFor257Roles() public {
+        bytes32[] memory roles = new bytes32[](257);
+        for (uint256 i = 0; i < roles.length; i++) {
+            roles[i] = bytes32(uint256(i + 1));
+        }
+
+        vm.expectRevert(abi.encodeWithSelector(BundleAnchorVerifier.TooManyRoles.selector, 257));
+        verifier.activeBundleBitmap(SUBJECT, roles);
+    }
+
+    function test_activeBundleBitmap_revertsForEmptyArray() public {
+        bytes32[] memory roles = new bytes32[](0);
+        vm.expectRevert(BundleAnchorVerifier.EmptyRoleSet.selector);
+        verifier.activeBundleBitmap(SUBJECT, roles);
+    }
+
     // ── getActiveBundleRecord ─────────────────────────────────────────────
 
     function test_getActiveBundleRecord_returnsRecord() public {
@@ -162,6 +299,36 @@ contract BundleAnchorVerifierTest is Test {
     function test_getActiveBundleRecord_revertsWhenNone() public {
         vm.expectRevert(abi.encodeWithSelector(BundleAnchorVerifier.NoBundleActive.selector, SUBJECT, ROLE_L));
         verifier.getActiveBundleRecord(SUBJECT, ROLE_L);
+    }
+
+    function test_getActiveBundleRecord_revertsIfActiveRecordSuperseded() public {
+        MockBundleAnchorRegistry mock = new MockBundleAnchorRegistry();
+        mock.setActive(BUNDLE_1);
+        mock.setRecord(IDocumentBundleAnchor.AnchorRecord({
+            bundleHash: BUNDLE_1,
+            subjectId: SUBJECT,
+            role: ROLE_L,
+            anchoredBy: anchorer,
+            anchoredAt: 1,
+            documentCount: 1,
+            metadataURI: "ipfs://old",
+            superseded: true,
+            supersededBy: BUNDLE_2
+        }));
+        VerifierHarness mockVerifier = new VerifierHarness(address(mock));
+
+        vm.expectRevert(abi.encodeWithSelector(BundleAnchorVerifier.BundleNotCurrent.selector, BUNDLE_1, SUBJECT, ROLE_L));
+        mockVerifier.getActiveBundleRecord(SUBJECT, ROLE_L);
+    }
+
+    function test_getActiveBundleRecord_revertsIfGetAnchorReverts() public {
+        MockBundleAnchorRegistry mock = new MockBundleAnchorRegistry();
+        mock.setActive(BUNDLE_1);
+        mock.setRevertGetAnchor(true);
+        VerifierHarness mockVerifier = new VerifierHarness(address(mock));
+
+        vm.expectRevert(abi.encodeWithSelector(BundleAnchorVerifier.BundleNotCurrent.selector, BUNDLE_1, SUBJECT, ROLE_L));
+        mockVerifier.getActiveBundleRecord(SUBJECT, ROLE_L);
     }
 
     // ── requireActiveBundle ───────────────────────────────────────────────
@@ -192,6 +359,26 @@ contract BundleAnchorVerifierTest is Test {
         verifier.requireBundleIsCurrent(BUNDLE_1, SUBJECT, ROLE_L);
     }
 
+    function test_requireBundleIsCurrent_revertsIfActiveRecordMismatched() public {
+        MockBundleAnchorRegistry mock = new MockBundleAnchorRegistry();
+        mock.setActive(BUNDLE_1);
+        mock.setRecord(IDocumentBundleAnchor.AnchorRecord({
+            bundleHash: BUNDLE_2,
+            subjectId: SUBJECT,
+            role: ROLE_L,
+            anchoredBy: anchorer,
+            anchoredAt: 1,
+            documentCount: 1,
+            metadataURI: "ipfs://wrong",
+            superseded: false,
+            supersededBy: bytes32(0)
+        }));
+        VerifierHarness mockVerifier = new VerifierHarness(address(mock));
+
+        vm.expectRevert(abi.encodeWithSelector(BundleAnchorVerifier.BundleNotCurrent.selector, BUNDLE_1, SUBJECT, ROLE_L));
+        mockVerifier.requireBundleIsCurrent(BUNDLE_1, SUBJECT, ROLE_L);
+    }
+
     // ── requireActiveBundlesForAllRoles ───────────────────────────────────
 
     function test_requireActiveBundlesForAllRoles_passesWhenAll() public {
@@ -207,6 +394,12 @@ contract BundleAnchorVerifierTest is Test {
         bytes32[] memory roles = new bytes32[](2);
         roles[0] = ROLE_L; roles[1] = ROLE_E;
         vm.expectRevert(abi.encodeWithSelector(BundleAnchorVerifier.NoBundleActive.selector, SUBJECT, ROLE_E));
+        verifier.requireActiveBundlesForAllRoles(SUBJECT, roles);
+    }
+
+    function test_requireActiveBundlesForAllRoles_revertsForEmptyArray() public {
+        bytes32[] memory roles = new bytes32[](0);
+        vm.expectRevert(BundleAnchorVerifier.EmptyRoleSet.selector);
         verifier.requireActiveBundlesForAllRoles(SUBJECT, roles);
     }
 }
