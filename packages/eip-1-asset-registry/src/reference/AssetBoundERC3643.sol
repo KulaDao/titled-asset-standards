@@ -67,7 +67,7 @@ contract AssetBoundERC3643 is ERC20, AccessControl, IAssetBoundToken {
     }
 
     /// @inheritdoc IAssetBoundToken
-    function anchorIdOf(uint256) external view override returns (bytes32) {
+    function anchorIdOf(uint256) external pure override returns (bytes32) {
         revert("AssetBoundERC3643: use anchorId() -- whole-contract binding only");
     }
 
@@ -83,11 +83,11 @@ contract AssetBoundERC3643 is ERC20, AccessControl, IAssetBoundToken {
 
     /// @inheritdoc IAssetBoundToken
     function isAnchorActive() external view override returns (bool) {
-        return IAssetAnchorRegistry(_registry).isActive(_anchorId);
+        return _isRegistryBound() && IAssetAnchorRegistry(_registry).isActive(_anchorId);
     }
 
     /// @inheritdoc IAssetBoundToken
-    function isAnchorActiveFor(uint256) external view override returns (bool) {
+    function isAnchorActiveFor(uint256) external pure override returns (bool) {
         revert("AssetBoundERC3643: use isAnchorActive() -- whole-contract binding only");
     }
 
@@ -144,11 +144,18 @@ contract AssetBoundERC3643 is ERC20, AccessControl, IAssetBoundToken {
     // ── Minting / burning ─────────────────────────────────────────────────
 
     function mint(address to, uint256 amount) external onlyRole(AGENT_ROLE) {
+        require(!_paused, "AssetBoundERC3643: token paused");
         require(_whitelisted[to], "AssetBoundERC3643: recipient not whitelisted");
+        require(!_frozen[to], "AssetBoundERC3643: recipient frozen");
+        _requireBoundAnchorActive();
         _mint(to, amount);
     }
 
     function burn(address from, uint256 amount) external onlyRole(AGENT_ROLE) {
+        require(!_paused, "AssetBoundERC3643: token paused");
+        require(_whitelisted[from], "AssetBoundERC3643: holder not whitelisted");
+        require(!_frozen[from], "AssetBoundERC3643: holder frozen");
+        _requireBoundAnchorActive();
         _burn(from, amount);
     }
 
@@ -162,13 +169,31 @@ contract AssetBoundERC3643 is ERC20, AccessControl, IAssetBoundToken {
             require(!_paused,       "AssetBoundERC3643: token paused");
             require(!_frozen[from], "AssetBoundERC3643: sender frozen");
             require(!_frozen[to],   "AssetBoundERC3643: recipient frozen");
+            require(_whitelisted[from], "AssetBoundERC3643: sender not whitelisted");
             require(_whitelisted[to], "AssetBoundERC3643: recipient not whitelisted");
-            require(
-                IAssetAnchorRegistry(_registry).isActive(_anchorId),
-                "AssetBoundERC3643: anchor inactive"
-            );
+            _requireBoundAnchorActive();
         }
         super._update(from, to, amount);
+    }
+
+    function _requireBoundAnchorActive() internal view {
+        IAssetAnchorRegistry registry = IAssetAnchorRegistry(_registry);
+        IAssetAnchorRegistry.AnchorRecord memory rec = registry.getAnchor(_anchorId);
+        require(
+            rec.boundToken == address(this) && rec.boundTokenId == 0,
+            "AssetBoundERC3643: registry binding mismatch"
+        );
+        require(registry.isActive(_anchorId), "AssetBoundERC3643: anchor inactive");
+    }
+
+    function _isRegistryBound() internal view returns (bool) {
+        try IAssetAnchorRegistry(_registry).getAnchor(_anchorId)
+            returns (IAssetAnchorRegistry.AnchorRecord memory rec)
+        {
+            return rec.boundToken == address(this) && rec.boundTokenId == 0;
+        } catch {
+            return false;
+        }
     }
 
     // ── ERC-165 ───────────────────────────────────────────────────────────

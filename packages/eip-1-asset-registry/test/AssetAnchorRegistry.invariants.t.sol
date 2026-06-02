@@ -4,6 +4,44 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {AssetAnchorRegistry} from "../src/reference/AssetAnchorRegistry.sol";
 import {AnchorMetadataLib} from "../src/libraries/AnchorMetadataLib.sol";
+import {IAssetBoundToken} from "../src/interfaces/IAssetBoundToken.sol";
+
+contract MockInvariantAssetBoundToken is IAssetBoundToken {
+    address public immutable override anchorRegistry;
+
+    bytes32 private immutable _anchorId;
+    uint256 private immutable _tokenId;
+    bool    private immutable _perToken;
+
+    constructor(address registry, bytes32 anchorId_, bool perToken_, uint256 tokenId_) {
+        anchorRegistry = registry;
+        _anchorId = anchorId_;
+        _perToken = perToken_;
+        _tokenId = tokenId_;
+    }
+
+    function anchorId() external view override returns (bytes32) {
+        require(!_perToken, "MockInvariantAssetBoundToken: per-token binding");
+        return _anchorId;
+    }
+
+    function anchorIdOf(uint256 tokenId) external view override returns (bytes32) {
+        require(_perToken && tokenId == _tokenId, "MockInvariantAssetBoundToken: tokenId not bound");
+        return _anchorId;
+    }
+
+    function isAssetBound() external pure override returns (bool) {
+        return true;
+    }
+
+    function isAnchorActive() external pure override returns (bool) {
+        return true;
+    }
+
+    function isAnchorActiveFor(uint256) external pure override returns (bool) {
+        return true;
+    }
+}
 
 /// @dev Drives all registry state transitions for the invariant fuzzer.
 contract RegistryHandler is Test {
@@ -13,8 +51,6 @@ contract RegistryHandler is Test {
     address public registrar = address(0xA1);
 
     bytes32[] public anchorIds;
-    address[]  public tokens;
-
     mapping(bytes32 => address)  public boundTokenOf;
     mapping(bytes32 => uint256)  public boundTokenIdOf;
     mapping(bytes32 => bytes32)  public legalHashOf;
@@ -22,6 +58,7 @@ contract RegistryHandler is Test {
     mapping(bytes32 => bool)     public wasDeactivated;
 
     mapping(bytes32 => bytes32)  public anchorByTokenPair;
+    mapping(bytes32 => address)  public tokenForSyntheticPair;
 
     uint64 internal _ts = 1_000;
 
@@ -30,10 +67,6 @@ contract RegistryHandler is Test {
         bytes32 registrarRole = registry.REGISTRAR_ROLE();
         vm.prank(admin);
         registry.grantRole(registrarRole, registrar);
-
-        tokens.push(address(0xC1));
-        tokens.push(address(0xC2));
-        tokens.push(address(0xC3));
     }
 
     function _metadata(uint64 expiry) internal view returns (bytes memory) {
@@ -71,16 +104,28 @@ contract RegistryHandler is Test {
     function bindToken(uint256 anchorIdx, uint256 tokenIdx, uint256 tokenId) external {
         if (anchorIds.length == 0) return;
         anchorIdx = bound(anchorIdx, 0, anchorIds.length - 1);
-        tokenIdx  = bound(tokenIdx,  0, tokens.length - 1);
+        tokenIdx  = bound(tokenIdx,  0, 2);
         tokenId   = bound(tokenId,   0, 3);
 
         bytes32 anchorId = anchorIds[anchorIdx];
-        address tok      = tokens[tokenIdx];
 
         if (boundTokenOf[anchorId] != address(0)) return;
 
+        bytes32 syntheticPair = keccak256(abi.encode(tokenIdx, tokenId));
+        address tok = tokenForSyntheticPair[syntheticPair];
+        bool knownPair = tok != address(0);
+        if (!knownPair) {
+            tok = address(new MockInvariantAssetBoundToken(
+                address(registry),
+                anchorId,
+                tokenId != 0,
+                tokenId
+            ));
+        }
+
         vm.prank(registrar);
         try registry.bindToken(anchorId, tok, tokenId) {
+            if (!knownPair) tokenForSyntheticPair[syntheticPair] = tok;
             boundTokenOf[anchorId]    = tok;
             boundTokenIdOf[anchorId]  = tokenId;
 

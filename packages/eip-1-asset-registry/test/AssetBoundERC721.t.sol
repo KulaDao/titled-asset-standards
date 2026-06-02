@@ -120,6 +120,19 @@ contract AssetBoundERC721Test is Test {
         assertEq(token.ownerOf(TOKEN_A), bob);
     }
 
+    function test_transfer_revertsBeforeRegistryBinding() public {
+        bytes32 anchorC = _registerAnchor(keccak256("legalC"), keccak256("evidenceC"));
+
+        vm.prank(admin);
+        token.mint(alice, 99, anchorC);
+
+        assertFalse(token.isAnchorActiveFor(99));
+
+        vm.prank(alice);
+        vm.expectRevert("AssetBoundERC721: registry binding mismatch");
+        token.transferFrom(alice, bob, 99);
+    }
+
     function test_transfer_revertsWhenAnchorDeactivated() public {
         vm.prank(admin);
         registry.deactivateAnchor(anchorA, "test");
@@ -158,6 +171,34 @@ contract AssetBoundERC721Test is Test {
         vm.prank(admin);
         vm.expectRevert("AssetBoundERC721: tokenId already bound");
         token.mint(alice, TOKEN_A, anchorA);
+    }
+
+    function test_mint_revertsDuplicateAnchor() public {
+        bytes32 anchorC = _registerAnchor(keccak256("legalC"), keccak256("evidenceC"));
+
+        vm.prank(admin);
+        token.mint(alice, 99, anchorC);
+
+        vm.prank(admin);
+        vm.expectRevert("AssetBoundERC721: anchor already assigned");
+        token.mint(bob, 100, anchorC);
+    }
+
+    function test_mint_revertsUnknownAnchor() public {
+        vm.prank(admin);
+        vm.expectRevert("AssetAnchorRegistry: anchor not found");
+        token.mint(alice, 99, keccak256("unknown-anchor"));
+    }
+
+    function test_mint_revertsInactiveAnchor() public {
+        bytes32 anchorC = _registerAnchor(keccak256("legalC"), keccak256("evidenceC"));
+
+        vm.prank(admin);
+        registry.deactivateAnchor(anchorC, "inactive");
+
+        vm.prank(admin);
+        vm.expectRevert("AssetBoundERC721: anchor inactive");
+        token.mint(alice, 99, anchorC);
     }
 
     function test_mint_revertsUnauthorized() public {

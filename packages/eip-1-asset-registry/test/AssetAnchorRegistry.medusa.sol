@@ -3,6 +3,44 @@ pragma solidity ^0.8.24;
 
 import {AssetAnchorRegistry} from "../src/reference/AssetAnchorRegistry.sol";
 import {AnchorMetadataLib} from "../src/libraries/AnchorMetadataLib.sol";
+import {IAssetBoundToken} from "../src/interfaces/IAssetBoundToken.sol";
+
+contract MockMedusaAssetBoundToken is IAssetBoundToken {
+    address public immutable override anchorRegistry;
+
+    bytes32 private immutable _anchorId;
+    uint256 private immutable _tokenId;
+    bool    private immutable _perToken;
+
+    constructor(address registry, bytes32 anchorId_, bool perToken_, uint256 tokenId_) {
+        anchorRegistry = registry;
+        _anchorId = anchorId_;
+        _perToken = perToken_;
+        _tokenId = tokenId_;
+    }
+
+    function anchorId() external view override returns (bytes32) {
+        require(!_perToken, "MockMedusaAssetBoundToken: per-token binding");
+        return _anchorId;
+    }
+
+    function anchorIdOf(uint256 tokenId) external view override returns (bytes32) {
+        require(_perToken && tokenId == _tokenId, "MockMedusaAssetBoundToken: tokenId not bound");
+        return _anchorId;
+    }
+
+    function isAssetBound() external pure override returns (bool) {
+        return true;
+    }
+
+    function isAnchorActive() external pure override returns (bool) {
+        return true;
+    }
+
+    function isAnchorActiveFor(uint256) external pure override returns (bool) {
+        return true;
+    }
+}
 
 /// @dev Medusa fuzz harness for AssetAnchorRegistry.
 ///      Run: medusa fuzz (from packages/eip-1-asset-registry)
@@ -26,18 +64,14 @@ contract AssetAnchorRegistryFuzzTest {
     mapping(bytes32 => bytes32)  internal evidenceHashOf;
     mapping(bytes32 => bool)     internal wasDeactivated;
     mapping(bytes32 => bytes32)  internal anchorByTokenPair;
+    mapping(bytes32 => address)  internal tokenForSyntheticPair;
 
-    address[] internal tokens;
     uint64    internal _ts = 1_000;
 
     constructor() {
         // Deploy with address(this) as admin so the harness itself holds
         // DEFAULT_ADMIN_ROLE and REGISTRAR_ROLE and can call all registry functions.
         registry = new AssetAnchorRegistry(address(this));
-
-        tokens.push(address(0xC001));
-        tokens.push(address(0xC002));
-        tokens.push(address(0xC003));
     }
 
     // ── State-mutating functions Medusa will call randomly ──────────────
@@ -65,15 +99,27 @@ contract AssetAnchorRegistryFuzzTest {
     function fuzz_bindToken(uint256 anchorIdx, uint256 tokenIdx, uint256 tokenId) external {
         if (anchorIds.length == 0) return;
         anchorIdx = anchorIdx % anchorIds.length;
-        tokenIdx  = tokenIdx  % tokens.length;
+        tokenIdx  = tokenIdx  % 3;
         tokenId   = tokenId   % 4;
 
         bytes32 anchorId = anchorIds[anchorIdx];
-        address tok      = tokens[tokenIdx];
 
         if (boundTokenOf[anchorId] != address(0)) return;
 
+        bytes32 syntheticPair = keccak256(abi.encode(tokenIdx, tokenId));
+        address tok = tokenForSyntheticPair[syntheticPair];
+        bool knownPair = tok != address(0);
+        if (!knownPair) {
+            tok = address(new MockMedusaAssetBoundToken(
+                address(registry),
+                anchorId,
+                tokenId != 0,
+                tokenId
+            ));
+        }
+
         try registry.bindToken{gas: 300_000}(anchorId, tok, tokenId) {
+            if (!knownPair) tokenForSyntheticPair[syntheticPair] = tok;
             boundTokenOf[anchorId]   = tok;
             boundTokenIdOf[anchorId] = tokenId;
             anchorByTokenPair[keccak256(abi.encode(tok, tokenId))] = anchorId;

@@ -101,6 +101,15 @@ contract AssetBoundERC3643Test is Test {
         assertEq(token.balanceOf(alice), 1000e18);
     }
 
+    function test_mint_revertsFrozenRecipient() public {
+        vm.prank(agent);
+        token.freezeAddress(alice);
+
+        vm.prank(agent);
+        vm.expectRevert("AssetBoundERC3643: recipient frozen");
+        token.mint(alice, 1000e18);
+    }
+
     function test_transfer_revertsNonWhitelistedRecipient() public {
         vm.prank(agent);
         token.mint(alice, 500e18);
@@ -110,6 +119,18 @@ contract AssetBoundERC3643Test is Test {
 
         vm.prank(alice);
         vm.expectRevert("AssetBoundERC3643: recipient not whitelisted");
+        token.transfer(bob, 100e18);
+    }
+
+    function test_transfer_revertsNonWhitelistedSender() public {
+        vm.prank(agent);
+        token.mint(alice, 500e18);
+
+        vm.prank(agent);
+        token.removeFromWhitelist(alice);
+
+        vm.prank(alice);
+        vm.expectRevert("AssetBoundERC3643: sender not whitelisted");
         token.transfer(bob, 100e18);
     }
 
@@ -171,6 +192,15 @@ contract AssetBoundERC3643Test is Test {
         token.transfer(bob, 100e18);
     }
 
+    function test_mint_revertsWhenPaused() public {
+        vm.prank(agent);
+        token.pause();
+
+        vm.prank(agent);
+        vm.expectRevert("AssetBoundERC3643: token paused");
+        token.mint(alice, 500e18);
+    }
+
     function test_unpause_restoresTransfers() public {
         vm.prank(agent);
         token.mint(alice, 500e18);
@@ -206,6 +236,17 @@ contract AssetBoundERC3643Test is Test {
         token.transfer(bob, 100e18);
     }
 
+    function test_mint_revertsWhenAnchorDeactivated() public {
+        vm.prank(admin);
+        registry.deactivateAnchor(anchorId, "regulatory");
+
+        assertFalse(token.isAnchorActive());
+
+        vm.prank(agent);
+        vm.expectRevert("AssetBoundERC3643: anchor inactive");
+        token.mint(alice, 500e18);
+    }
+
     function test_transfer_revertsWhenExpired() public {
         vm.prank(agent);
         token.mint(alice, 500e18);
@@ -214,6 +255,14 @@ contract AssetBoundERC3643Test is Test {
         vm.prank(alice);
         vm.expectRevert("AssetBoundERC3643: anchor inactive");
         token.transfer(bob, 100e18);
+    }
+
+    function test_mint_revertsWhenExpired() public {
+        vm.warp(block.timestamp + 366 days);
+
+        vm.prank(agent);
+        vm.expectRevert("AssetBoundERC3643: anchor inactive");
+        token.mint(alice, 500e18);
     }
 
     // ── Access control ────────────────────────────────────────────────────
@@ -244,5 +293,49 @@ contract AssetBoundERC3643Test is Test {
         vm.prank(agent);
         token.burn(alice, 400e18);
         assertEq(token.balanceOf(alice), 600e18);
+    }
+
+    function test_burn_revertsWhenPaused() public {
+        vm.prank(agent);
+        token.mint(alice, 1000e18);
+        vm.prank(agent);
+        token.pause();
+
+        vm.prank(agent);
+        vm.expectRevert("AssetBoundERC3643: token paused");
+        token.burn(alice, 400e18);
+    }
+
+    function test_burn_revertsWhenHolderFrozen() public {
+        vm.prank(agent);
+        token.mint(alice, 1000e18);
+        vm.prank(agent);
+        token.freezeAddress(alice);
+
+        vm.prank(agent);
+        vm.expectRevert("AssetBoundERC3643: holder frozen");
+        token.burn(alice, 400e18);
+    }
+
+    function test_burn_revertsWhenHolderRemovedFromWhitelist() public {
+        vm.prank(agent);
+        token.mint(alice, 1000e18);
+        vm.prank(agent);
+        token.removeFromWhitelist(alice);
+
+        vm.prank(agent);
+        vm.expectRevert("AssetBoundERC3643: holder not whitelisted");
+        token.burn(alice, 400e18);
+    }
+
+    function test_burn_revertsWhenAnchorInactive() public {
+        vm.prank(agent);
+        token.mint(alice, 1000e18);
+        vm.prank(admin);
+        registry.deactivateAnchor(anchorId, "regulatory");
+
+        vm.prank(agent);
+        vm.expectRevert("AssetBoundERC3643: anchor inactive");
+        token.burn(alice, 400e18);
     }
 }

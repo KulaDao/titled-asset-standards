@@ -43,7 +43,7 @@ contract AssetBoundERC20 is ERC20, AccessControl, IAssetBoundToken {
 
     /// @inheritdoc IAssetBoundToken
     /// @dev ERC-20 uses whole-contract binding; per-token lookup is not applicable.
-    function anchorIdOf(uint256) external view override returns (bytes32) {
+    function anchorIdOf(uint256) external pure override returns (bytes32) {
         revert("AssetBoundERC20: use anchorId() -- whole-contract binding only");
     }
 
@@ -59,12 +59,12 @@ contract AssetBoundERC20 is ERC20, AccessControl, IAssetBoundToken {
 
     /// @inheritdoc IAssetBoundToken
     function isAnchorActive() external view override returns (bool) {
-        return IAssetAnchorRegistry(_registry).isActive(_anchorId);
+        return _isRegistryBound() && IAssetAnchorRegistry(_registry).isActive(_anchorId);
     }
 
     /// @inheritdoc IAssetBoundToken
     /// @dev ERC-20 uses whole-contract binding; per-token check is not applicable.
-    function isAnchorActiveFor(uint256) external view override returns (bool) {
+    function isAnchorActiveFor(uint256) external pure override returns (bool) {
         revert("AssetBoundERC20: use isAnchorActive() -- whole-contract binding only");
     }
 
@@ -78,12 +78,29 @@ contract AssetBoundERC20 is ERC20, AccessControl, IAssetBoundToken {
 
     function _update(address from, address to, uint256 amount) internal override {
         if (from != address(0) && to != address(0)) {
-            require(
-                IAssetAnchorRegistry(_registry).isActive(_anchorId),
-                "AssetBoundERC20: anchor inactive"
-            );
+            _requireBoundAnchorActive();
         }
         super._update(from, to, amount);
+    }
+
+    function _requireBoundAnchorActive() internal view {
+        IAssetAnchorRegistry registry = IAssetAnchorRegistry(_registry);
+        IAssetAnchorRegistry.AnchorRecord memory rec = registry.getAnchor(_anchorId);
+        require(
+            rec.boundToken == address(this) && rec.boundTokenId == 0,
+            "AssetBoundERC20: registry binding mismatch"
+        );
+        require(registry.isActive(_anchorId), "AssetBoundERC20: anchor inactive");
+    }
+
+    function _isRegistryBound() internal view returns (bool) {
+        try IAssetAnchorRegistry(_registry).getAnchor(_anchorId)
+            returns (IAssetAnchorRegistry.AnchorRecord memory rec)
+        {
+            return rec.boundToken == address(this) && rec.boundTokenId == 0;
+        } catch {
+            return false;
+        }
     }
 
     // ── ERC-165 ───────────────────────────────────────────────────────────

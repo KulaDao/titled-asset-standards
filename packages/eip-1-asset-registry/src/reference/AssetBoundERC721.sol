@@ -20,6 +20,7 @@ contract AssetBoundERC721 is ERC721, AccessControl, IAssetBoundToken {
     address private immutable _registry;
 
     mapping(uint256 => bytes32) private _anchorIds;
+    mapping(bytes32 => bool)    private _anchorAssigned;
 
     event AnchorSet(uint256 indexed tokenId, bytes32 indexed anchorId);
 
@@ -71,7 +72,7 @@ contract AssetBoundERC721 is ERC721, AccessControl, IAssetBoundToken {
     function isAnchorActiveFor(uint256 tokenId) external view override returns (bool) {
         bytes32 id = _anchorIds[tokenId];
         require(id != bytes32(0), "AssetBoundERC721: tokenId not bound");
-        return IAssetAnchorRegistry(_registry).isActive(id);
+        return _isRegistryBound(id, tokenId) && IAssetAnchorRegistry(_registry).isActive(id);
     }
 
     // ── Minting ───────────────────────────────────────────────────────────
@@ -84,7 +85,15 @@ contract AssetBoundERC721 is ERC721, AccessControl, IAssetBoundToken {
     {
         require(anchorId_ != bytes32(0),        "AssetBoundERC721: zero anchorId");
         require(_anchorIds[tokenId] == bytes32(0), "AssetBoundERC721: tokenId already bound");
+        require(!_anchorAssigned[anchorId_], "AssetBoundERC721: anchor already assigned");
+
+        IAssetAnchorRegistry registry = IAssetAnchorRegistry(_registry);
+        IAssetAnchorRegistry.AnchorRecord memory rec = registry.getAnchor(anchorId_);
+        require(rec.boundToken == address(0), "AssetBoundERC721: anchor already bound");
+        require(registry.isActive(anchorId_), "AssetBoundERC721: anchor inactive");
+
         _anchorIds[tokenId] = anchorId_;
+        _anchorAssigned[anchorId_] = true;
         _safeMint(to, tokenId);
         emit AnchorSet(tokenId, anchorId_);
     }
@@ -100,14 +109,31 @@ contract AssetBoundERC721 is ERC721, AccessControl, IAssetBoundToken {
             if (from != address(0)) {
                 bytes32 id = _anchorIds[tokenId];
                 if (id != bytes32(0)) {
-                    require(
-                        IAssetAnchorRegistry(_registry).isActive(id),
-                        "AssetBoundERC721: anchor inactive"
-                    );
+                    _requireBoundAnchorActive(id, tokenId);
                 }
             }
         }
         return super._update(to, tokenId, auth);
+    }
+
+    function _requireBoundAnchorActive(bytes32 anchorId_, uint256 tokenId) internal view {
+        IAssetAnchorRegistry registry = IAssetAnchorRegistry(_registry);
+        IAssetAnchorRegistry.AnchorRecord memory rec = registry.getAnchor(anchorId_);
+        require(
+            rec.boundToken == address(this) && rec.boundTokenId == tokenId,
+            "AssetBoundERC721: registry binding mismatch"
+        );
+        require(registry.isActive(anchorId_), "AssetBoundERC721: anchor inactive");
+    }
+
+    function _isRegistryBound(bytes32 anchorId_, uint256 tokenId) internal view returns (bool) {
+        try IAssetAnchorRegistry(_registry).getAnchor(anchorId_)
+            returns (IAssetAnchorRegistry.AnchorRecord memory rec)
+        {
+            return rec.boundToken == address(this) && rec.boundTokenId == tokenId;
+        } catch {
+            return false;
+        }
     }
 
     // ── ERC-165 ───────────────────────────────────────────────────────────

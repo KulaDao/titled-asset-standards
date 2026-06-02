@@ -45,10 +45,10 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, AccessControl {
             _registeredBy[anchorId] == msg.sender || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
             "AssetAnchorRegistry: not authorized to bind"
         );
-        _requireTokenRegistryAgreement(token);
-
         bytes32 pairKey = _tokenPairKey(token, tokenId);
         require(_boundAnchorByTokenPair[pairKey] == bytes32(0), "AssetAnchorRegistry: token pair already bound");
+
+        _requireTokenBindingAgreement(anchorId, token, tokenId);
 
         rec.boundToken   = token;
         rec.boundTokenId = tokenId;
@@ -65,10 +65,12 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, AccessControl {
         uint256 tokenId
     ) external onlyRole(REGISTRAR_ROLE) returns (bytes32 anchorId) {
         require(token != address(0), "AssetAnchorRegistry: zero token address");
-        _requireTokenRegistryAgreement(token);
+        bytes32 expectedAnchorId = _anchorIdFor(legalHash, evidenceHash);
 
         bytes32 pairKey = _tokenPairKey(token, tokenId);
         require(_boundAnchorByTokenPair[pairKey] == bytes32(0), "AssetAnchorRegistry: token pair already bound");
+
+        _requireTokenBindingAgreement(expectedAnchorId, token, tokenId);
 
         anchorId = _register(legalHash, evidenceHash, metadata);
         AnchorRecord storage rec = _records[anchorId];
@@ -101,16 +103,53 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, AccessControl {
         return keccak256(abi.encode(token, tokenId));
     }
 
-    /// @dev If the token declares IAssetBoundToken.anchorRegistry(), it must point back to this
-    ///      registry. Plain ERC-20/721 tokens that don't implement the interface are allowed.
-    function _requireTokenRegistryAgreement(address token) internal view {
+    function _anchorIdFor(bytes32 legalHash, bytes32 evidenceHash) internal pure returns (bytes32) {
+        return keccak256(abi.encode(legalHash, evidenceHash));
+    }
+
+    function _requireTokenBindingAgreement(
+        bytes32 anchorId,
+        address token,
+        uint256 tokenId
+    ) internal view {
         (bool ok, bytes memory data) = token.staticcall(
-            abi.encodeWithSignature("anchorRegistry()")
+            abi.encodeWithSelector(IAssetBoundToken.anchorRegistry.selector)
         );
-        if (ok && data.length == 32) {
-            address declared = abi.decode(data, (address));
-            require(declared == address(this), "AssetAnchorRegistry: token registry mismatch");
+        require(ok && data.length >= 32, "AssetAnchorRegistry: token not asset-bound");
+
+        address declared = abi.decode(data, (address));
+        require(declared == address(this), "AssetAnchorRegistry: token registry mismatch");
+
+        bytes32 declaredAnchor = _declaredTokenAnchor(token, tokenId);
+        require(declaredAnchor == anchorId, "AssetAnchorRegistry: token anchor mismatch");
+    }
+
+    function _declaredTokenAnchor(address token, uint256 tokenId) internal view returns (bytes32) {
+        if (tokenId == 0) {
+            (bool perTokenOk, bytes memory perTokenData) = token.staticcall(
+                abi.encodeWithSelector(IAssetBoundToken.anchorIdOf.selector, tokenId)
+            );
+            if (perTokenOk && perTokenData.length >= 32) {
+                return abi.decode(perTokenData, (bytes32));
+            }
         }
+
+        if (tokenId != 0) {
+            (bool ok, bytes memory data) = token.staticcall(
+                abi.encodeWithSelector(IAssetBoundToken.anchorIdOf.selector, tokenId)
+            );
+            require(ok && data.length >= 32, "AssetAnchorRegistry: tokenId not bound");
+            return abi.decode(data, (bytes32));
+        }
+
+        (bool wholeContractOk, bytes memory wholeContractData) = token.staticcall(
+            abi.encodeWithSelector(IAssetBoundToken.anchorId.selector)
+        );
+        require(
+            wholeContractOk && wholeContractData.length >= 32,
+            "AssetAnchorRegistry: token anchor unavailable"
+        );
+        return abi.decode(wholeContractData, (bytes32));
     }
 
     function _register(
@@ -121,7 +160,7 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, AccessControl {
         require(legalHash != bytes32(0),    "AssetAnchorRegistry: zero legalHash");
         require(evidenceHash != bytes32(0), "AssetAnchorRegistry: zero evidenceHash");
 
-        anchorId = keccak256(abi.encode(legalHash, evidenceHash));
+        anchorId = _anchorIdFor(legalHash, evidenceHash);
         require(_records[anchorId].registeredAt == 0, "AssetAnchorRegistry: duplicate anchor");
 
         AnchorMetadataLib.AnchorMetadata memory meta = AnchorMetadataLib.decode(metadata);

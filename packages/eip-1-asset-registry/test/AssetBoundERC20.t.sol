@@ -102,6 +102,38 @@ contract AssetBoundERC20Test is Test {
         assertEq(token.balanceOf(bob), 100e18);
     }
 
+    function test_transfer_revertsBeforeRegistryBinding() public {
+        vm.prank(registrar);
+        bytes32 unboundAnchor = registry.registerAnchor(
+            keccak256("unbound-legal"),
+            keccak256("unbound-evidence"),
+            AnchorMetadataLib.encode(AnchorMetadataLib.AnchorMetadata({
+                assetClass:      bytes32("GOLD"),
+                jurisdiction:    bytes32("ZM"),
+                attestationDate: uint64(block.timestamp - 1),
+                expiresAt:       uint64(block.timestamp + 365 days),
+                uri:             bytes("ipfs://QmUnbound"),
+                extensions:      bytes("")
+            }))
+        );
+        AssetBoundERC20 unboundToken = new AssetBoundERC20(
+            "Unbound Gold",
+            "UGLD",
+            unboundAnchor,
+            address(registry),
+            admin
+        );
+
+        vm.prank(admin);
+        unboundToken.mint(alice, 500e18);
+
+        assertFalse(unboundToken.isAnchorActive());
+
+        vm.prank(alice);
+        vm.expectRevert("AssetBoundERC20: registry binding mismatch");
+        unboundToken.transfer(bob, 100e18);
+    }
+
     function test_transfer_revertsWhenAnchorDeactivated() public {
         vm.prank(admin);
         token.mint(alice, 500e18);

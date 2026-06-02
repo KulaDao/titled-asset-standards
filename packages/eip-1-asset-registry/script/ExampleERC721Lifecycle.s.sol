@@ -31,7 +31,6 @@ contract ExampleERC721Lifecycle is Script {
         address deployer    = vm.addr(deployerKey);
         address ownerA      = vm.envOr("OWNER_A", address(0xAA));
         address ownerB      = vm.envOr("OWNER_B", address(0xBB));
-        address buyer       = vm.envOr("BUYER",   address(0xCC));
 
         vm.startBroadcast(deployerKey);
 
