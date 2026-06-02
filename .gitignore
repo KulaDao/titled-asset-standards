@@ -9,6 +9,11 @@ broadcast/
 # Slither output
 *.dot
 *.sarif
+slither_results.json
+
+# Medusa fuzz artifacts
+corpus/
+crytic-export/
 
 # Environment files
 .env
@@ -19,3 +24,8 @@ broadcast/
 .DS_Store
 .DS_Store?
 ._*
+
+# AI planning docs
+docs/superpowers/
+.serena
+.claude

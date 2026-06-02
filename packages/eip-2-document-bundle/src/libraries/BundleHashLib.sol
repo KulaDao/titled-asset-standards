@@ -60,6 +60,8 @@ library BundleHashLib {
     function _gt(DocumentEntry memory a, DocumentEntry memory b) private pure returns (bool) {
         if (a.role != b.role)                     return a.role > b.role;
         if (a.filenameHash != b.filenameHash)     return a.filenameHash > b.filenameHash;
-        return a.contentHash > b.contentHash;
+        if (a.contentHash != b.contentHash)       return a.contentHash > b.contentHash;
+        if (a.mimeTypeHash != b.mimeTypeHash)     return a.mimeTypeHash > b.mimeTypeHash;
+        return a.normProfileId > b.normProfileId;
     }
 }

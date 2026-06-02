@@ -1,4 +1,4 @@
-# eip-4-impact-snapshot
+# eip-5-impact-snapshot
 
 On-chain append-only impact snapshot log that binds structured, auditable impact data to a `(subjectId, indicatorId)` namespace, with correction chains, independent attestation, and methodology versioning.
 
