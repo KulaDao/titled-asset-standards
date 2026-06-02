@@ -4,11 +4,44 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {AssetAnchorRegistry} from "../src/reference/AssetAnchorRegistry.sol";
 import {IAssetAnchorRegistry} from "../src/interfaces/IAssetAnchorRegistry.sol";
+import {IAssetBoundToken} from "../src/interfaces/IAssetBoundToken.sol";
 import {AnchorMetadataLib} from "../src/libraries/AnchorMetadataLib.sol";
 
-contract MockBoundToken {
-    address public anchorRegistry;
-    constructor(address registry) { anchorRegistry = registry; }
+contract MockAssetBoundToken is IAssetBoundToken {
+    address public immutable override anchorRegistry;
+
+    bytes32 private immutable _anchorId;
+    uint256 private immutable _tokenId;
+    bool    private immutable _perToken;
+
+    constructor(address registry, bytes32 anchorId_, bool perToken_, uint256 tokenId_) {
+        anchorRegistry = registry;
+        _anchorId = anchorId_;
+        _perToken = perToken_;
+        _tokenId = tokenId_;
+    }
+
+    function anchorId() external view override returns (bytes32) {
+        require(!_perToken, "MockAssetBoundToken: per-token binding");
+        return _anchorId;
+    }
+
+    function anchorIdOf(uint256 tokenId) external view override returns (bytes32) {
+        require(_perToken && tokenId == _tokenId, "MockAssetBoundToken: tokenId not bound");
+        return _anchorId;
+    }
+
+    function isAssetBound() external pure override returns (bool) {
+        return true;
+    }
+
+    function isAnchorActive() external pure override returns (bool) {
+        return true;
+    }
+
+    function isAnchorActiveFor(uint256) external pure override returns (bool) {
+        return true;
+    }
 }
 
 contract AssetAnchorRegistryTest is Test {
@@ -45,6 +78,18 @@ contract AssetAnchorRegistryTest is Test {
             uri:             bytes("ipfs://QmFoo"),
             extensions:      bytes("")
         }));
+    }
+
+    function _wholeToken(bytes32 anchorId) internal returns (address) {
+        return address(new MockAssetBoundToken(address(registry), anchorId, false, 0));
+    }
+
+    function _perToken(bytes32 anchorId, uint256 tokenId) internal returns (address) {
+        return address(new MockAssetBoundToken(address(registry), anchorId, true, tokenId));
+    }
+
+    function _futureAnchorId(bytes32 legalHash, bytes32 evidenceHash) internal pure returns (bytes32) {
+        return keccak256(abi.encode(legalHash, evidenceHash));
     }
 
     // ─── registerAnchor ───────────────────────────────────────────────
@@ -159,71 +204,95 @@ contract AssetAnchorRegistryTest is Test {
     function test_bindToken_succeeds_by_registrar() public {
         vm.prank(registrar);
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        address boundToken = _wholeToken(anchorId);
 
         vm.prank(registrar);
-        registry.bindToken(anchorId, token, 0);
+        registry.bindToken(anchorId, boundToken, 0);
 
         IAssetAnchorRegistry.AnchorRecord memory rec = registry.getAnchor(anchorId);
-        assertEq(rec.boundToken,   token, "boundToken mismatch");
+        assertEq(rec.boundToken,   boundToken, "boundToken mismatch");
         assertEq(rec.boundTokenId, 0,     "boundTokenId mismatch");
     }
 
     function test_bindToken_succeeds_by_admin() public {
         vm.prank(registrar);
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        address boundToken = _wholeToken(anchorId);
 
         vm.prank(admin);
-        registry.bindToken(anchorId, token, 0);
+        registry.bindToken(anchorId, boundToken, 0);
 
-        assertEq(registry.getAnchor(anchorId).boundToken, token, "admin bind failed");
+        assertEq(registry.getAnchor(anchorId).boundToken, boundToken, "admin bind failed");
     }
 
     function test_bindToken_revertsRegistryMismatch() public {
         vm.prank(registrar);
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
 
-        address wrongToken = address(new MockBoundToken(address(0xDEAD)));
+        address wrongToken = address(new MockAssetBoundToken(address(0xDEAD), anchorId, false, 0));
         vm.prank(registrar);
         vm.expectRevert("AssetAnchorRegistry: token registry mismatch");
         registry.bindToken(anchorId, wrongToken, 0);
     }
 
-    function test_bindToken_allowsPlainTokenWithoutAnchorRegistry() public {
+    function test_bindToken_revertsPlainTokenWithoutAnchorRegistry() public {
         vm.prank(registrar);
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
 
         vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: token not asset-bound");
         registry.bindToken(anchorId, token, 0);
-        assertEq(registry.getAnchor(anchorId).boundToken, token);
     }
 
     function test_bindToken_allowsCompliantTokenPointingToThisRegistry() public {
         vm.prank(registrar);
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
 
-        address compliantToken = address(new MockBoundToken(address(registry)));
+        address compliantToken = _wholeToken(anchorId);
         vm.prank(registrar);
         registry.bindToken(anchorId, compliantToken, 0);
         assertEq(registry.getAnchor(anchorId).boundToken, compliantToken);
     }
 
-    function test_bindToken_emitsTokenBound() public {
+    function test_bindToken_revertsAnchorMismatch_wholeContract() public {
         vm.prank(registrar);
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
 
-        vm.expectEmit(true, true, false, true);
-        emit TokenBound(anchorId, token, 42);
+        address mismatchedToken = _wholeToken(keccak256("different-anchor"));
         vm.prank(registrar);
-        registry.bindToken(anchorId, token, 42);
+        vm.expectRevert("AssetAnchorRegistry: token anchor mismatch");
+        registry.bindToken(anchorId, mismatchedToken, 0);
+    }
+
+    function test_bindToken_revertsAnchorMismatch_perToken() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        address mismatchedToken = _perToken(keccak256("different-anchor"), 42);
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: token anchor mismatch");
+        registry.bindToken(anchorId, mismatchedToken, 42);
+    }
+
+    function test_bindToken_emitsTokenBound() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        address boundToken = _perToken(anchorId, 42);
+
+        vm.expectEmit(true, true, false, true);
+        emit TokenBound(anchorId, boundToken, 42);
+        vm.prank(registrar);
+        registry.bindToken(anchorId, boundToken, 42);
     }
 
     function test_bindToken_revertsUnauthorized() public {
         vm.prank(registrar);
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        address boundToken = _wholeToken(anchorId);
 
         vm.prank(other);
         vm.expectRevert("AssetAnchorRegistry: not authorized to bind");
-        registry.bindToken(anchorId, token, 0);
+        registry.bindToken(anchorId, boundToken, 0);
     }
 
     function test_bindToken_revertsAnchorNotFound() public {
@@ -235,12 +304,14 @@ contract AssetAnchorRegistryTest is Test {
     function test_bindToken_revertsAlreadyBound() public {
         vm.prank(registrar);
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        address boundToken = _wholeToken(anchorId);
         vm.prank(registrar);
-        registry.bindToken(anchorId, token, 0);
+        registry.bindToken(anchorId, boundToken, 0);
 
+        address secondToken = _wholeToken(anchorId);
         vm.prank(admin);
         vm.expectRevert("AssetAnchorRegistry: already bound");
-        registry.bindToken(anchorId, address(0xC0), 0);
+        registry.bindToken(anchorId, secondToken, 0);
     }
 
     function test_bindToken_revertsZeroAddress() public {
@@ -255,8 +326,9 @@ contract AssetAnchorRegistryTest is Test {
     function test_bindToken_revertsTokenPairAlreadyBound() public {
         vm.prank(registrar);
         bytes32 anchorId1 = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        address boundToken = _perToken(anchorId1, 42);
         vm.prank(registrar);
-        registry.bindToken(anchorId1, token, 42);
+        registry.bindToken(anchorId1, boundToken, 42);
 
         vm.prank(registrar);
         bytes32 anchorId2 = registry.registerAnchor(
@@ -264,77 +336,84 @@ contract AssetAnchorRegistryTest is Test {
         );
         vm.prank(registrar);
         vm.expectRevert("AssetAnchorRegistry: token pair already bound");
-        registry.bindToken(anchorId2, token, 42);
+        registry.bindToken(anchorId2, boundToken, 42);
     }
 
     function test_registerAndBind_revertsTokenPairAlreadyBound() public {
         vm.warp(500_000);
+        address boundToken = _perToken(_futureAnchorId(LEGAL_HASH, EVIDENCE_HASH), 7);
         vm.prank(registrar);
-        registry.registerAndBind(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000), token, 7);
+        registry.registerAndBind(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000), boundToken, 7);
 
         vm.prank(registrar);
         vm.expectRevert("AssetAnchorRegistry: token pair already bound");
         registry.registerAndBind(
             keccak256("other-legal"), keccak256("other-evidence"),
-            _validMetadata(2_000_000), token, 7
+            _validMetadata(2_000_000), boundToken, 7
         );
     }
 
     function test_bindToken_revertsAnchorInactive() public {
         vm.prank(registrar);
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        address boundToken = _wholeToken(anchorId);
 
         vm.prank(admin);
         registry.deactivateAnchor(anchorId, "test");
 
         vm.prank(registrar);
         vm.expectRevert("AssetAnchorRegistry: anchor inactive");
-        registry.bindToken(anchorId, token, 0);
+        registry.bindToken(anchorId, boundToken, 0);
     }
 
     function test_bindToken_revertsAnchorExpired() public {
         vm.prank(registrar);
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        address boundToken = _wholeToken(anchorId);
 
         vm.warp(2_000_001);
         vm.prank(registrar);
         vm.expectRevert("AssetAnchorRegistry: anchor expired");
-        registry.bindToken(anchorId, token, 0);
+        registry.bindToken(anchorId, boundToken, 0);
     }
 
     function test_registerAndBind_revertsAnchorExpired() public {
         vm.warp(3_000_000);
+        address boundToken = _wholeToken(_futureAnchorId(LEGAL_HASH, EVIDENCE_HASH));
         vm.prank(registrar);
         vm.expectRevert("AssetAnchorRegistry: metadata already expired");
-        registry.registerAndBind(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000), token, 0);
+        registry.registerAndBind(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000), boundToken, 0);
     }
 
     // ─── registerAndBind ──────────────────────────────────────────────
 
     function test_registerAndBind_storesAll() public {
         vm.warp(500_000);
+        bytes32 expectedId = _futureAnchorId(LEGAL_HASH, EVIDENCE_HASH);
+        address boundToken = _perToken(expectedId, 7);
         vm.prank(registrar);
         bytes32 anchorId = registry.registerAndBind(
-            LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000), token, 7
+            LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000), boundToken, 7
         );
 
         IAssetAnchorRegistry.AnchorRecord memory rec = registry.getAnchor(anchorId);
-        assertEq(rec.boundToken,   token, "boundToken mismatch");
+        assertEq(rec.boundToken,   boundToken, "boundToken mismatch");
         assertEq(rec.boundTokenId, 7,     "boundTokenId mismatch");
         assertTrue(rec.active,            "active should be true");
     }
 
     function test_registerAndBind_emitsBothEvents() public {
         bytes32 expectedId = keccak256(abi.encode(LEGAL_HASH, EVIDENCE_HASH));
+        address boundToken = _wholeToken(expectedId);
 
         vm.expectEmit(true, false, false, true);
         emit AnchorRegistered(expectedId, LEGAL_HASH, EVIDENCE_HASH);
 
         vm.expectEmit(true, true, false, true);
-        emit TokenBound(expectedId, token, 0);
+        emit TokenBound(expectedId, boundToken, 0);
 
         vm.prank(registrar);
-        registry.registerAndBind(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000), token, 0);
+        registry.registerAndBind(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000), boundToken, 0);
     }
 
     function test_registerAndBind_revertsZeroToken() public {
@@ -363,18 +442,21 @@ contract AssetAnchorRegistryTest is Test {
     function test_isBound_trueAfterBind() public {
         vm.prank(registrar);
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        address boundToken = _wholeToken(anchorId);
         vm.prank(registrar);
-        registry.bindToken(anchorId, token, 0);
+        registry.bindToken(anchorId, boundToken, 0);
         assertTrue(registry.isBound(anchorId), "should be bound");
     }
 
     // ─── isBound after deactivation ───────────────────────────────────
 
     function test_isBound_trueAfterDeactivation() public {
-        vm.startPrank(registrar);
+        vm.prank(registrar);
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
-        registry.bindToken(anchorId, token, 0);
-        vm.stopPrank();
+        address boundToken = _wholeToken(anchorId);
+
+        vm.prank(registrar);
+        registry.bindToken(anchorId, boundToken, 0);
 
         vm.prank(admin);
         registry.deactivateAnchor(anchorId, "retired");

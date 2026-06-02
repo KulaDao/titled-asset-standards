@@ -7,7 +7,7 @@ On-chain registry that binds a dual-hash anchor (legal + evidence document commi
 | Interface | Purpose |
 |-----------|---------|
 | `IAssetAnchorRegistry` | Registry operations: register, bind, query |
-| `IAssetBoundToken` | Token-side view of the binding (optional but enforced when declared) |
+| `IAssetBoundToken` | Token-side view of the binding (required for registry binding) |
 
 ### `IAssetAnchorRegistry`
 
@@ -44,6 +44,9 @@ REGISTER ──► ACTIVE ──► EXPIRED (expiresAt reached)
 **Binding** creates a permanent, immutable link between an anchor and a `(token, tokenId)` pair:
 - Only possible while the anchor is active and unexpired
 - Only the original registrar or `DEFAULT_ADMIN_ROLE` can bind
+- Each bound token must expose `IAssetBoundToken`-compatible views
+- The token's `anchorRegistry()` must point back to the registry
+- The token's `anchorId()` / `anchorIdOf(tokenId)` must match the anchor being bound
 - Each `(token, tokenId)` pair can be bound to at most one anchor in a given registry
 - `isBound()` returns `true` even after the anchor is deactivated or expired
 
@@ -56,7 +59,7 @@ REGISTER ──► ACTIVE ──► EXPIRED (expiresAt reached)
 
 ## Consumer Verification
 
-A complete binding verification requires checking **both sides**:
+A complete binding verification checks **both sides**:
 
 ```solidity
 // 1. Registry side — anchor exists and is active
@@ -76,7 +79,9 @@ bytes32 tokenAnchor = IAssetBoundToken(token).anchorIdOf(tokenId);
 require(tokenAnchor == anchorId);
 ```
 
-The registry enforces the registry-side of this check at bind time (`anchorRegistry()` must equal `address(this)` if declared). The token-side `anchorId()` / `anchorIdOf()` check is the caller's responsibility.
+The registry enforces these token-side checks at bind time. Consumers SHOULD repeat
+the same two-sided check when relying on an existing binding, especially if they
+cache registry state off-chain.
 
 ## Build & Test
 
