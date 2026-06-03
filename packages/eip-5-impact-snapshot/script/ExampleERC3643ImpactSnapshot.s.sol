@@ -10,9 +10,10 @@ import {
 } from "../src/libraries/ImpactConstants.sol";
 
 /// @title  ExampleERC3643ImpactSnapshot
+/// @title  ExampleERC3643ImpactSnapshot
 /// @notice Shows ESG impact reporting for a T-REX (ERC-3643) green bond.
-///         The bond's EIP-1 anchorId is the subjectId in EIP-4, linking on-chain
-///         token compliance (EIP-1), document bundles (EIP-2), and impact data (EIP-4).
+///         The bond's EIP-1 anchorId is the subjectId in EIP-5, linking on-chain
+///         token compliance (EIP-1), document bundles (EIP-2), and impact data (EIP-5).
 ///
 /// Prerequisites -- run ExampleERC3643Lifecycle.s.sol first (EIP-1 package):
 ///   export ASSET_ANCHOR_ID=<anchorId from registerAnchor for the bond>
