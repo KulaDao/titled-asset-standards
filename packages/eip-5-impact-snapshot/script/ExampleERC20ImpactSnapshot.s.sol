@@ -40,7 +40,8 @@ contract ExampleERC20ImpactSnapshot is Script {
         address deployer      = vm.addr(deployerKey);
         bytes32 assetAnchorId = vm.envBytes32("ASSET_ANCHOR_ID");
         address reporter      = vm.envOr("REPORTER",  deployer);
-        address attestor      = vm.envOr("ATTESTOR",  deployer);
+        uint256 attestorKey   = vm.envOr("ATTESTOR_PRIVATE_KEY", deployerKey);
+        address attestor      = vm.addr(attestorKey);
 
         vm.startBroadcast(deployerKey);
 
