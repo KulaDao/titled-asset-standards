@@ -73,13 +73,23 @@ contract ExampleERC20ImpactSnapshot is Script {
         console.log("Q1 JOBS_CREATED snapshot index:", q1JobsIdx);
 
         // 3. Attestor independently endorses Q1 carbon snapshot
-        log.attestSnapshot(
-            assetAnchorId, q1CarbonIdx,
-            true,
-            keccak256("third-party-carbon-audit-q1-2025"),
-            "ipfs://QmCarbonAuditQ12025"
-        );
-        console.log("Q1 CARBON_OFFSET attested by independent auditor.");
+        if (attestor == deployer) {
+            console.log(
+                "Skipping attestation (self-attestation disallowed). Set ATTESTOR_PRIVATE_KEY to a different key."
+            );
+        } else {
+            vm.stopBroadcast();
+            vm.startBroadcast(attestorKey);
+            log.attestSnapshot(
+                assetAnchorId, q1CarbonIdx,
+                true,
+                keccak256("third-party-carbon-audit-q1-2025"),
+                "ipfs://QmCarbonAuditQ12025"
+            );
+            vm.stopBroadcast();
+            vm.startBroadcast(deployerKey);
+            console.log("Q1 CARBON_OFFSET attested by independent auditor.");
+        }
 
         // 4a. Q2 2025 -- Carbon offset (new period, original snapshot)
         uint256 q2CarbonIdx = log.recordSnapshot(
