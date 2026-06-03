@@ -145,6 +145,7 @@ jobs:
       matrix:
         package:
           - eip-2-document-bundle
+          - eip-3-transfer-domain
 
     steps:
       - uses: actions/checkout@v4

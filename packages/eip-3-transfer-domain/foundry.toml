@@ -3,4 +3,13 @@ src = "src"
 out = "out"
 libs = ["lib"]
 test = "test"
-solc_version = "0.8.20"
+solc_version = "0.8.24"
+auto_detect_remappings = false
+remappings = [
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "forge-std/=lib/openzeppelin-contracts/lib/forge-std/src/",
+  "ds-test/=lib/openzeppelin-contracts/lib/forge-std/lib/ds-test/src/"
+]
+
+[lint]
+exclude_lints = ["asm-keccak256"]
