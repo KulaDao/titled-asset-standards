@@ -139,9 +139,10 @@ contract ExampleERC3643ImpactSnapshot is Script {
         vm.stopBroadcast();
 
         console.log("\n== ERC-3643 ESG bond impact summary ==");
+        console.log("\n== ERC-3643 ESG bond impact summary ==");
         console.log("Three indicators tracked: ENERGY_GENERATED, CARBON_OFFSET, BENEFICIARIES.");
         console.log("2024 annual report attested; CO2 correction chain linked.");
-        console.log("EIP-1 anchor ID = EIP-2 subjectId = EIP-4 subjectId.");
+        console.log("EIP-1 anchor ID = EIP-2 subjectId = EIP-5 subjectId.");
         console.log("All three EIP layers reference the same on-chain asset identity.");
     }
 }
