@@ -120,7 +120,7 @@ contract ExampleERC20ImpactSnapshot is Script {
         vm.stopBroadcast();
 
         console.log("\n== ERC-20 impact summary ==");
-        console.log("Asset anchor ID used as subjectId -- links all EIP-4 data back to EIP-1 asset.");
+        console.log("Asset anchor ID used as subjectId -- links all EIP-5 data back to EIP-1 asset.");
         console.log("Q1 carbon corrected; Q2 original; attestation on Q1 original is preserved.");
     }
 }
