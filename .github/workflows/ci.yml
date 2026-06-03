@@ -25,9 +25,23 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Check for contracts
+        id: check
+        working-directory: packages/${{ matrix.package }}
+        run: |
+          if ls src/interfaces/*.sol 2>/dev/null | grep -q .; then
+            echo "has_contracts=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_contracts=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: foundry-rs/foundry-toolchain@v1
+        if: steps.check.outputs.has_contracts == 'true'
+        with:
+          version: v1.7.1
 
       - name: Cache Foundry artifacts
+        if: steps.check.outputs.has_contracts == 'true'
         uses: actions/cache@v4
         with:
           path: packages/${{ matrix.package }}/out
@@ -35,17 +49,18 @@ jobs:
           restore-keys: foundry-${{ matrix.package }}-
 
       - name: Build & test
+        if: steps.check.outputs.has_contracts == 'true'
         working-directory: packages/${{ matrix.package }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! ls src/interfaces/*.sol 2>/dev/null | grep -q .; then
-            echo "No contracts yet, skipping"
-            exit 0
-          fi
           forge install
           forge build --sizes
           forge test -vvv
+
+      - name: No contracts, skipping
+        if: steps.check.outputs.has_contracts == 'false'
+        run: echo "No contracts yet, skipping"
 
   static-analysis:
     name: Slither (${{ matrix.package }})
@@ -66,8 +81,6 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: foundry-rs/foundry-toolchain@v1
-
       - name: Check for contracts
         id: check
         working-directory: packages/${{ matrix.package }}
@@ -77,6 +90,11 @@ jobs:
           else
             echo "has_contracts=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        if: steps.check.outputs.has_contracts == 'true'
+        with:
+          version: v1.7.1
 
       - name: Run Slither
         if: steps.check.outputs.has_contracts == 'true'
@@ -108,9 +126,23 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Check for contracts
+        id: check
+        working-directory: packages/${{ matrix.package }}
+        run: |
+          if ls src/interfaces/*.sol 2>/dev/null | grep -q .; then
+            echo "has_contracts=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_contracts=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: foundry-rs/foundry-toolchain@v1
+        if: steps.check.outputs.has_contracts == 'true'
+        with:
+          version: v1.7.1
 
       - name: Cache Foundry artifacts
+        if: steps.check.outputs.has_contracts == 'true'
         uses: actions/cache@v4
         with:
           path: packages/${{ matrix.package }}/out
@@ -118,16 +150,17 @@ jobs:
           restore-keys: foundry-${{ matrix.package }}-
 
       - name: Gas snapshot
+        if: steps.check.outputs.has_contracts == 'true'
         working-directory: packages/${{ matrix.package }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! ls src/interfaces/*.sol 2>/dev/null | grep -q .; then
-            echo "No contracts yet, skipping"
-            exit 0
-          fi
           forge install
           forge snapshot
+
+      - name: No contracts, skipping
+        if: steps.check.outputs.has_contracts == 'false'
+        run: echo "No contracts yet, skipping"
 
       - name: Upload gas snapshot
         if: always()
@@ -146,6 +179,7 @@ jobs:
         package:
           - eip-2-document-bundle
           - eip-3-transfer-domain
+          - eip-5-impact-snapshot
 
     steps:
       - uses: actions/checkout@v4
@@ -153,6 +187,8 @@ jobs:
           submodules: recursive
 
       - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
 
       - name: Install Medusa
         run: |
@@ -164,7 +200,9 @@ jobs:
 
       - name: Build contracts
         working-directory: packages/${{ matrix.package }}
-        run: forge build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: forge install && forge build
 
       - name: Run Medusa invariant fuzzing
         working-directory: packages/${{ matrix.package }}
