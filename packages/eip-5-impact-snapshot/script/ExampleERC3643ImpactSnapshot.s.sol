@@ -92,10 +92,20 @@ contract ExampleERC3643ImpactSnapshot is Script {
 
         // 3. Independent ESG auditor attests all three annual snapshots
         bytes32 auditEvidence = keccak256("esg-audit-annual-2024-final-report");
-        log.attestSnapshot(assetAnchorId, energyIdx, true, auditEvidence, "ipfs://QmESGAudit2024Energy");
-        log.attestSnapshot(assetAnchorId, co2Idx,    true, auditEvidence, "ipfs://QmESGAudit2024Carbon");
-        log.attestSnapshot(assetAnchorId, benIdx,    true, auditEvidence, "ipfs://QmESGAudit2024Beneficiaries");
-        console.log("All 2024 snapshots attested by ESG auditor.");
+        if (esgAuditor == deployer) {
+            console.log(
+                "Skipping attestations (self-attestation disallowed). Set ESG_AUDITOR_PRIVATE_KEY to a different key."
+            );
+        } else {
+            vm.stopBroadcast();
+            vm.startBroadcast(esgAuditorKey);
+            log.attestSnapshot(assetAnchorId, energyIdx, true, auditEvidence, "ipfs://QmESGAudit2024Energy");
+            log.attestSnapshot(assetAnchorId, co2Idx,    true, auditEvidence, "ipfs://QmESGAudit2024Carbon");
+            log.attestSnapshot(assetAnchorId, benIdx,    true, auditEvidence, "ipfs://QmESGAudit2024Beneficiaries");
+            vm.stopBroadcast();
+            vm.startBroadcast(deployerKey);
+            console.log("All 2024 snapshots attested by ESG auditor.");
+        }
 
         // 4. H1 2025 interim report -- energy generated
         uint256 h1EnergyIdx = log.recordSnapshot(
