@@ -125,7 +125,7 @@ contract ExampleERC721ImpactSnapshot is Script {
         vm.stopBroadcast();
 
         console.log("\n== ERC-721 impact summary ==");
-        console.log("Each NFT's anchorId is an independent subjectId in EIP-4.");
+        console.log("Each NFT's anchorId is an independent subjectId in EIP-5.");
         console.log("Methodology update on property A does not affect property B.");
     }
 }
