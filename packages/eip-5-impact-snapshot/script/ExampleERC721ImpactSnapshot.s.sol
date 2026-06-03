@@ -8,8 +8,9 @@ import {ENERGY_SAVED, CARBON_OFFSET, UNIT_KWH, UNIT_TCO2E}       from "../src/li
 
 /// @title  ExampleERC721ImpactSnapshot
 /// @notice Shows how an ERC-721 real-estate collection reports per-property
-///         impact data using EIP-4. Each token's EIP-1 anchorId is the subjectId --
+///         impact data using EIP-5. Each token's EIP-1 anchorId is the subjectId --
 ///         every property has independent, isolated impact records.
+///
 ///
 /// Prerequisites -- run ExampleERC721Lifecycle.s.sol first (EIP-1 package):
 ///   export ANCHOR_A=<anchorId for property A (NYC Office)>
