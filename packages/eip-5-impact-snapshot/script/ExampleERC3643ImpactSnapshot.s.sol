@@ -44,7 +44,8 @@ contract ExampleERC3643ImpactSnapshot is Script {
         address deployer      = vm.addr(deployerKey);
         bytes32 assetAnchorId = vm.envBytes32("ASSET_ANCHOR_ID");
         address reporter      = vm.envOr("REPORTER", deployer);
-        address esgAuditor    = vm.envOr("ESG_AUDITOR", deployer);
+        uint256 esgAuditorKey  = vm.envOr("ESG_AUDITOR_PRIVATE_KEY", deployerKey);
+        address esgAuditor     = vm.addr(esgAuditorKey);
 
         vm.startBroadcast(deployerKey);
 
