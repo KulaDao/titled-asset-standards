@@ -9,13 +9,10 @@
 		"pruneFrequency": 5,
 		"corpusDirectory": "corpus",
 		"coverageEnabled": true,
-		"coverageFormats": [
-			"html",
-			"lcov"
-		],
+		"coverageFormats": ["html", "lcov"],
 		"coverageExclusions": [],
 		"revertReporterEnabled": false,
-		"targetContracts": ["AssetAnchorRegistryFuzzTest"],
+		"targetContracts": ["ImpactSnapshotLogFuzzTest"],
 		"predeployedContracts": {},
 		"targetContractsBalances": [],
 		"constructorArgs": {},
@@ -52,15 +49,11 @@
 			},
 			"propertyTesting": {
 				"enabled": true,
-				"testPrefixes": [
-					"property_"
-				]
+				"testPrefixes": ["property_"]
 			},
 			"optimizationTesting": {
-				"enabled": true,
-				"testPrefixes": [
-					"optimize_"
-				]
+				"enabled": false,
+				"testPrefixes": ["optimize_"]
 			},
 			"targetFunctionSignatures": [],
 			"excludeFunctionSignatures": []
@@ -88,11 +81,6 @@
 			"exportDirectory": "",
 			"args": ["--foundry-compile-all"]
 		}
-	},
-	"slither": {
-		"useSlither": true,
-		"cachePath": "slither_results.json",
-		"args": []
 	},
 	"logging": {
 		"level": "info",

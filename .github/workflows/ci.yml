@@ -178,6 +178,7 @@ jobs:
       matrix:
         package:
           - eip-2-document-bundle
+          - eip-5-impact-snapshot
 
     steps:
       - uses: actions/checkout@v4
@@ -198,7 +199,9 @@ jobs:
 
       - name: Build contracts
         working-directory: packages/${{ matrix.package }}
-        run: forge build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: forge install && forge build
 
       - name: Run Medusa invariant fuzzing
         working-directory: packages/${{ matrix.package }}
