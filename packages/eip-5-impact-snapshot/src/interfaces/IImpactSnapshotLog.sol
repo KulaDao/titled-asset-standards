@@ -7,15 +7,15 @@ interface IImpactSnapshotLog {
     struct IndicatorSnapshot {
         bytes32 subjectId;
         bytes32 indicatorId;
-        int256  value;
-        uint8   decimals;
+        int256 value;
+        uint8 decimals;
         bytes32 unit;
-        uint64  periodStart;
-        uint64  periodEnd;
+        uint64 periodStart;
+        uint64 periodEnd;
         bytes32 methodologyHash;
-        string  methodologyURI;
+        string methodologyURI;
         address reportedBy;
-        uint64  reportedAt;
+        uint64 reportedAt;
         uint256 correctsIndex;
         uint256 correctedByIndex;
     }
@@ -24,47 +24,47 @@ interface IImpactSnapshotLog {
         bytes32 indexed subjectId,
         bytes32 indexed indicatorId,
         uint256 indexed snapshotIndex,
-        int256  value,
-        uint8   decimals,
+        int256 value,
+        uint8 decimals,
         bytes32 unit,
-        uint64  periodStart,
-        uint64  periodEnd,
+        uint64 periodStart,
+        uint64 periodEnd,
         bytes32 methodologyHash,
         uint256 correctsIndex,
         address reportedBy
     );
 
     function recordSnapshot(
-        bytes32        subjectId,
-        bytes32        indicatorId,
-        int256         value,
-        uint8          decimals,
-        bytes32        unit,
-        uint64         periodStart,
-        uint64         periodEnd,
-        bytes32        methodologyHash,
+        bytes32 subjectId,
+        bytes32 indicatorId,
+        int256 value,
+        uint8 decimals,
+        bytes32 unit,
+        uint64 periodStart,
+        uint64 periodEnd,
+        bytes32 methodologyHash,
         string calldata methodologyURI,
-        uint256        correctsIndex
+        uint256 correctsIndex
     ) external returns (uint256 snapshotIndex);
 
-    function getSnapshot(bytes32 subjectId, uint256 snapshotIndex)
-        external view returns (IndicatorSnapshot memory);
+    function getSnapshot(bytes32 subjectId, uint256 snapshotIndex) external view returns (IndicatorSnapshot memory);
 
     function snapshotCount(bytes32 subjectId) external view returns (uint256);
 
-    function indicatorSnapshotCount(bytes32 subjectId, bytes32 indicatorId)
-        external view returns (uint256);
+    function indicatorSnapshotCount(bytes32 subjectId, bytes32 indicatorId) external view returns (uint256);
 
     function indicatorSnapshotAt(bytes32 subjectId, bytes32 indicatorId, uint256 ordinal)
-        external view returns (uint256 snapshotIndex);
+        external
+        view
+        returns (uint256 snapshotIndex);
 
     function latestIndicatorSnapshot(bytes32 subjectId, bytes32 indicatorId)
-        external view returns (uint256 snapshotIndex);
+        external
+        view
+        returns (uint256 snapshotIndex);
 
-    function currentSnapshotForPeriod(
-        bytes32 subjectId,
-        bytes32 indicatorId,
-        uint64  periodStart,
-        uint64  periodEnd
-    ) external view returns (uint256 snapshotIndex);
+    function currentSnapshotForPeriod(bytes32 subjectId, bytes32 indicatorId, uint64 periodStart, uint64 periodEnd)
+        external
+        view
+        returns (uint256 snapshotIndex);
 }
