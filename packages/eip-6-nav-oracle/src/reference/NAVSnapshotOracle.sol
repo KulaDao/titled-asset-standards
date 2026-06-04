@@ -7,7 +7,7 @@ import {PER_SHARE, PER_UNIT, TOTAL} from "../libraries/NAVConstants.sol";
 
 contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
     bytes4 private constant _INTERFACE_ID_ERC165 = 0x01ffc9a7;
-    uint256 private constant _MAX_NORMALIZED_ABS_NAV = uint256(type(int256).max) / 1e18;
+    uint256 public constant MAX_PROVIDERS_PER_VALUATION = 64;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = bytes32(0);
     bytes32 public constant PROVIDER_ROLE = keccak256("PROVIDER");
@@ -111,7 +111,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         require(_isKnownBasis(params.navBasis), "NAVSnapshotOracle: unknown navBasis");
         require(params.decimals <= 18, "NAVSnapshotOracle: decimals too high");
         require(params.nav != type(int256).min, "NAVSnapshotOracle: unsupported nav");
-        require(_abs(params.nav) <= _MAX_NORMALIZED_ABS_NAV, "NAVSnapshotOracle: nav too large");
+        require(_abs(params.nav) <= _maxSafeAbsNAV(params.decimals), "NAVSnapshotOracle: nav too large");
         require(params.valuationTimestamp <= block.timestamp, "NAVSnapshotOracle: future valuation");
         require(block.timestamp <= type(uint64).max, "NAVSnapshotOracle: timestamp overflow");
 
@@ -191,6 +191,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         onlyRole(CONFIG_ROLE)
     {
         require(quorum_ != 0, "NAVSnapshotOracle: zero quorum");
+        require(quorum_ <= MAX_PROVIDERS_PER_VALUATION, "NAVSnapshotOracle: quorum too high");
         require(deviationThresholdBps_ <= 10_000, "NAVSnapshotOracle: deviationThresholdBps too high");
 
         bytes32 streamKey = _streamKey(subjectId, currency);
@@ -414,6 +415,10 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         return navBasis == PER_UNIT || navBasis == PER_SHARE || navBasis == TOTAL;
     }
 
+    function _maxSafeAbsNAV(uint8 decimals) internal pure returns (uint256) {
+        return uint256(type(int256).max) / (10 ** uint256(18 - decimals));
+    }
+
     function _recordProviderTimestamp(
         bytes32 streamKey,
         uint64 valuationTimestamp,
@@ -426,6 +431,10 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         }
 
         if (!_timestampProviderSeen[streamKey][valuationTimestamp][provider]) {
+            require(
+                _timestampProviders[streamKey][valuationTimestamp].length < MAX_PROVIDERS_PER_VALUATION,
+                "NAVSnapshotOracle: provider cap exceeded"
+            );
             _timestampProviderSeen[streamKey][valuationTimestamp][provider] = true;
             _timestampProviders[streamKey][valuationTimestamp].push(provider);
         }

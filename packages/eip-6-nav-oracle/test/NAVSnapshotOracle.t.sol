@@ -11,6 +11,7 @@ interface Vm {
     function expectEmit(bool checkTopic1, bool checkTopic2, bool checkTopic3, bool checkData) external;
     function prank(address msgSender) external;
     function warp(uint256 newTimestamp) external;
+    function addr(uint256 privateKey) external returns (address keyAddr);
 }
 
 contract NAVSnapshotOracleTest {
@@ -189,6 +190,24 @@ contract NAVSnapshotOracleTest {
         oracle.publishNAV(SUBJECT, USD, PER_SHARE, type(int256).max, 2, T0, METHOD_1, "", NO_CORRECTION);
     }
 
+    function test_publishNAVUsesDecimalAwareMagnitudeLimit() public {
+        int256 maxDecimals18 = type(int256).max;
+        uint256 idx = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, maxDecimals18, 18, T0, METHOD_1, NO_CORRECTION);
+        _assertEq(idx, 0, "max decimals 18 index");
+
+        (int256 latestNav, uint8 latestDecimals,,,,) = oracle.latestNAV(SUBJECT, USD);
+        _assertEq(latestNav, maxDecimals18, "max decimals 18 accepted");
+        _assertEq(latestDecimals, 18, "latest decimals");
+
+        int256 maxDecimals17 = type(int256).max / 10;
+        _publish(PROVIDER_A, SUBJECT, EUR, PER_SHARE, maxDecimals17, 17, T0, METHOD_1, NO_CORRECTION);
+
+        vm.warp(T1);
+        vm.prank(PROVIDER_A);
+        vm.expectRevert(bytes("NAVSnapshotOracle: nav too large"));
+        oracle.publishNAV(SUBJECT_2, USD, PER_SHARE, maxDecimals17 + 1, 17, T1, METHOD_1, "", NO_CORRECTION);
+    }
+
     function test_publishNAVRejectsDuplicateProviderTimestampOriginal() public {
         _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
 
@@ -326,6 +345,34 @@ contract NAVSnapshotOracleTest {
         vm.prank(ADMIN);
         vm.expectRevert(bytes("NAVSnapshotOracle: deviationThresholdBps too high"));
         oracle.setAggregationConfig(SUBJECT, USD, 2, 10_001);
+    }
+
+    function test_setAggregationConfigRejectsQuorumAboveProviderCap() public {
+        uint256 cap = oracle.MAX_PROVIDERS_PER_VALUATION();
+
+        vm.prank(ADMIN);
+        vm.expectRevert(bytes("NAVSnapshotOracle: quorum too high"));
+        oracle.setAggregationConfig(SUBJECT, USD, cap + 1, 10_000);
+    }
+
+    function test_publishNAVRejectsProviderSetAboveCap() public {
+        bytes32 providerRole = oracle.PROVIDER_ROLE();
+        uint256 cap = oracle.MAX_PROVIDERS_PER_VALUATION();
+
+        for (uint256 i = 0; i < cap; i++) {
+            address provider = vm.addr(10_000 + i);
+            vm.prank(ADMIN);
+            oracle.grantRole(providerRole, provider);
+            _publish(provider, SUBJECT, USD, PER_SHARE, 100, 2, T2, METHOD_1, NO_CORRECTION);
+        }
+
+        address excessProvider = vm.addr(10_000 + cap);
+        vm.prank(ADMIN);
+        oracle.grantRole(providerRole, excessProvider);
+
+        vm.prank(excessProvider);
+        vm.expectRevert(bytes("NAVSnapshotOracle: provider cap exceeded"));
+        oracle.publishNAV(SUBJECT, USD, PER_SHARE, 200, 2, T2, METHOD_1, "", NO_CORRECTION);
     }
 
     function test_aggregationMedianNormalizesDecimalsAndReturnsLatestQuorumTimestamp() public {
