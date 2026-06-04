@@ -2,7 +2,6 @@
 eip: kula-suite
 title: Kula Protocol EIP Suite — Tokenized Asset Infrastructure Standards
 description: Six composable EIP specifications for on-chain asset registries, document anchoring, transfer governance, compliance logging, impact reporting, and NAV oracles.
-author: Kula Protocol
 discussions-to: https://ethereum-magicians.org
 status: Draft
 type: Standards Track
