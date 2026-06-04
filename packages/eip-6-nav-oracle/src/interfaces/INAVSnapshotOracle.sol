@@ -28,6 +28,7 @@ interface INAVSnapshotOracle {
         uint8 decimals,
         bytes32 navBasis,
         uint64 valuationTimestamp,
+        bytes32 methodologyHash,
         uint256 correctsIndex
     );
 

@@ -15,9 +15,11 @@ median aggregation.
 
 - Snapshot indices are scoped per `(subjectId, currency)` stream.
 - `latestNAV()` returns the terminal snapshot with the most recent valuation timestamp, not a late correction for an older valuation period.
-- Corrections are fork-free. A snapshot can be corrected once, only by the original provider, and the correction must match the target valuation timestamp and NAV basis.
+- A provider can publish only one original snapshot per stream and valuation timestamp. Updates to that provider/timestamp must be linked as corrections.
+- Corrections are fork-free. A snapshot can be corrected once, only by the original provider, and the correction must match the provider's latest snapshot for that valuation timestamp, target valuation timestamp, and NAV basis.
 - `latestNAVStatus()` reverts until both heartbeat and max valuation age are configured for the stream.
 - Aggregation uses the latest valuation timestamp with quorum, rejects mixed NAV bases, normalizes decimals to the highest submitted decimal precision, and returns the lower median for even provider counts.
+- `aggregatedNAV()` also reverts until heartbeat and max valuation age are configured, since it returns staleness flags.
 - Deviation detection is emitted from the non-view `publishNAV()` path once quorum is reached.
 
 ## Constants

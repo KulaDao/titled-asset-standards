@@ -42,13 +42,28 @@ contract NAVSnapshotOracleFuzzTest {
         uint256 count = oracle.snapshotCount(SUBJECT, USD);
         if (count == 0) return true;
 
-        (,,,, uint64 publishedAt,) = oracle.latestNAV(SUBJECT, USD);
+        (
+            int256 latestNav,
+            uint8 latestDecimals,
+            bytes32 latestBasis,
+            uint64 latestValuation,
+            uint64 latestPublishedAt,
+        ) = oracle.latestNAV(SUBJECT, USD);
+
+        bool foundExactTerminal;
         for (uint256 i = 0; i < count; i++) {
             INAVSnapshotOracle.NAVSnapshot memory snap = oracle.getSnapshot(SUBJECT, USD, i);
-            if (snap.publishedAt == publishedAt && snap.correctedByIndex == 0) return true;
+            if (snap.correctedByIndex != 0) continue;
+            if (snap.valuationTimestamp > latestValuation) return false;
+            if (
+                snap.nav == latestNav && snap.decimals == latestDecimals && snap.navBasis == latestBasis
+                    && snap.valuationTimestamp == latestValuation && snap.publishedAt == latestPublishedAt
+            ) {
+                foundExactTerminal = true;
+            }
         }
 
-        return false;
+        return foundExactTerminal;
     }
 
     function property_correctionsAreForkFree() external view returns (bool) {

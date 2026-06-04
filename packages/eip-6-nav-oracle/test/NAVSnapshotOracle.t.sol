@@ -25,6 +25,22 @@ contract NAVSnapshotOracleTest {
         uint256 deviationBps
     );
 
+    event NAVPublished(
+        bytes32 indexed subjectId,
+        bytes32 indexed currency,
+        address indexed provider,
+        uint256 snapshotIndex,
+        int256 nav,
+        uint8 decimals,
+        bytes32 navBasis,
+        uint64 valuationTimestamp,
+        bytes32 methodologyHash,
+        uint256 correctsIndex
+    );
+
+    event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
+    event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
+
     NAVSnapshotOracle private oracle;
 
     address private constant ADMIN = address(0xA0);
@@ -83,7 +99,35 @@ contract NAVSnapshotOracleTest {
         oracle.setStalenessConfig(SUBJECT, USD, 1 days, 0);
     }
 
+    function test_grantRoleEmitsAndAllowsProvider() public {
+        bytes32 providerRole = oracle.PROVIDER_ROLE();
+
+        vm.expectEmit(true, true, true, true);
+        emit RoleGranted(providerRole, OUTSIDER, ADMIN);
+        vm.prank(ADMIN);
+        oracle.grantRole(providerRole, OUTSIDER);
+
+        _assertTrue(oracle.hasRole(providerRole, OUTSIDER), "outsider granted provider role");
+        _publish(OUTSIDER, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+    }
+
+    function test_revokeRoleEmitsAndBlocksProvider() public {
+        bytes32 providerRole = oracle.PROVIDER_ROLE();
+
+        vm.expectEmit(true, true, true, true);
+        emit RoleRevoked(providerRole, PROVIDER_A, ADMIN);
+        vm.prank(ADMIN);
+        oracle.revokeRole(providerRole, PROVIDER_A);
+
+        vm.warp(T0);
+        vm.prank(PROVIDER_A);
+        vm.expectRevert(bytes("NAVSnapshotOracle: missing role"));
+        oracle.publishNAV(SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, "", NO_CORRECTION);
+    }
+
     function test_publishNAVStoresLatestAndProviderHistory() public {
+        vm.expectEmit(true, true, true, true);
+        emit NAVPublished(SUBJECT, USD, PROVIDER_A, 0, 123_456, 4, PER_SHARE, T0, METHOD_1, NO_CORRECTION);
         uint256 idx = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 123_456, 4, T0, METHOD_1, NO_CORRECTION);
 
         _assertEq(idx, 0, "index");
@@ -143,6 +187,14 @@ contract NAVSnapshotOracleTest {
         vm.prank(PROVIDER_A);
         vm.expectRevert(bytes("NAVSnapshotOracle: nav too large"));
         oracle.publishNAV(SUBJECT, USD, PER_SHARE, type(int256).max, 2, T0, METHOD_1, "", NO_CORRECTION);
+    }
+
+    function test_publishNAVRejectsDuplicateProviderTimestampOriginal() public {
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.prank(PROVIDER_A);
+        vm.expectRevert(bytes("NAVSnapshotOracle: duplicate submission"));
+        oracle.publishNAV(SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, "", NO_CORRECTION);
     }
 
     function test_latestNAVStatusRevertsUntilConfigured() public {
@@ -220,6 +272,16 @@ contract NAVSnapshotOracleTest {
         oracle.publishNAV(SUBJECT, USD, TOTAL, 110, 2, T0, METHOD_2, "", 0);
     }
 
+    function test_correctionMustTargetLatestProviderTimestampSnapshot() public {
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, 0);
+
+        vm.warp(T0 + 2);
+        vm.prank(PROVIDER_A);
+        vm.expectRevert(bytes("NAVSnapshotOracle: target already corrected"));
+        oracle.publishNAV(SUBJECT, USD, PER_SHARE, 120, 2, T0, METHOD_2, "", 0);
+    }
+
     function test_latestNAVUsesMostRecentValuationNotLateOldCorrection() public {
         _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
         _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 200, 2, T1, METHOD_1, NO_CORRECTION);
@@ -258,6 +320,12 @@ contract NAVSnapshotOracleTest {
 
         vm.expectRevert(bytes("NAVSnapshotOracle: quorum not met"));
         oracle.aggregatedNAV(SUBJECT, USD);
+    }
+
+    function test_setAggregationConfigRejectsDeviationThresholdAboveBpsScale() public {
+        vm.prank(ADMIN);
+        vm.expectRevert(bytes("NAVSnapshotOracle: deviationThresholdBps too high"));
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_001);
     }
 
     function test_aggregationMedianNormalizesDecimalsAndReturnsLatestQuorumTimestamp() public {
@@ -309,6 +377,19 @@ contract NAVSnapshotOracleTest {
         _assertEq(valuationTimestamp, T1, "submission timestamp");
     }
 
+    function test_setAggregationConfigRecomputesHistoricalLatestEligibleTimestamp() public {
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 200, 2, T1, METHOD_1, NO_CORRECTION);
+
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
+        _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T0, "historical quorum timestamp");
+
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 201, 2, T1, METHOD_1, NO_CORRECTION);
+        _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T1, "incrementally updated timestamp");
+    }
+
     function test_aggregationRejectsMixedBasis() public {
         vm.prank(ADMIN);
         oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
@@ -351,6 +432,20 @@ contract NAVSnapshotOracleTest {
         vm.expectEmit(true, true, false, true);
         emit NAVDeviationDetected(SUBJECT, USD, T0, 100, 150, 5_000);
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 150, 2, T0, METHOD_1, NO_CORRECTION);
+    }
+
+    function test_deviationOverflowReturnsMaxInsteadOfReverting() public {
+        int256 huge = type(int256).max / 1e18;
+        int256 normalizedMin = -huge * int256(1e18);
+
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 100);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, -huge, 0, T0, METHOD_1, NO_CORRECTION);
+
+        vm.expectEmit(true, true, false, true);
+        emit NAVDeviationDetected(SUBJECT, USD, T0, normalizedMin, huge, type(uint256).max);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, huge, 18, T0, METHOD_1, NO_CORRECTION);
     }
 
     function test_supportsInterfaces() public view {

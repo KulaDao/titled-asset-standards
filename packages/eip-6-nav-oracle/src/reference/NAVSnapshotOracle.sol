@@ -51,6 +51,8 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
     mapping(bytes32 => mapping(uint64 => address[])) private _timestampProviders;
     mapping(bytes32 => mapping(uint64 => mapping(address => bool))) private _timestampProviderSeen;
     mapping(bytes32 => mapping(uint64 => mapping(address => uint256))) private _providerTimestampSnapshotPlusOne;
+    mapping(bytes32 => uint64) private _latestEligibleTimestamp;
+    mapping(bytes32 => bool) private _latestEligibleTimestampSet;
 
     constructor(address admin) {
         require(admin != address(0), "NAVSnapshotOracle: zero admin");
@@ -115,14 +117,21 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
 
         bytes32 streamKey = _streamKey(params.subjectId, params.currency);
         snapshotIndex = _snapshots[streamKey].length;
+        uint256 existingPlusOne = _providerTimestampSnapshotPlusOne[streamKey][params.valuationTimestamp][msg.sender];
 
-        if (params.correctsIndex != NO_CORRECTION) {
+        if (params.correctsIndex == NO_CORRECTION) {
+            require(existingPlusOne == 0, "NAVSnapshotOracle: duplicate submission");
+        } else {
             require(params.correctsIndex < snapshotIndex, "NAVSnapshotOracle: correctsIndex out of range");
             NAVSnapshot storage target = _snapshots[streamKey][params.correctsIndex];
             require(target.correctedByIndex == 0, "NAVSnapshotOracle: target already corrected");
             require(target.provider == msg.sender, "NAVSnapshotOracle: provider mismatch");
             require(target.valuationTimestamp == params.valuationTimestamp, "NAVSnapshotOracle: valuation mismatch");
             require(target.navBasis == params.navBasis, "NAVSnapshotOracle: navBasis mismatch");
+            require(
+                existingPlusOne != 0 && existingPlusOne - 1 == params.correctsIndex,
+                "NAVSnapshotOracle: correctsIndex not latest"
+            );
             target.correctedByIndex = snapshotIndex;
         }
 
@@ -146,6 +155,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         _providerSnapshotIndices[streamKey][msg.sender].push(snapshotIndex);
         _recordProviderTimestamp(streamKey, params.valuationTimestamp, msg.sender, snapshotIndex);
         _updateLatestPointers(streamKey, msg.sender, snapshotIndex);
+        _updateLatestEligibleTimestamp(streamKey, params.valuationTimestamp);
 
         emit NAVPublished(
             params.subjectId,
@@ -156,6 +166,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             params.decimals,
             params.navBasis,
             params.valuationTimestamp,
+            params.methodologyHash,
             params.correctsIndex
         );
 
@@ -180,8 +191,13 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         onlyRole(CONFIG_ROLE)
     {
         require(quorum_ != 0, "NAVSnapshotOracle: zero quorum");
-        _aggregationConfigs[_streamKey(subjectId, currency)] =
+        require(deviationThresholdBps_ <= 10_000, "NAVSnapshotOracle: deviationThresholdBps too high");
+
+        bytes32 streamKey = _streamKey(subjectId, currency);
+        _aggregationConfigs[streamKey] =
             AggregationConfig({quorum: quorum_, deviationThresholdBps: deviationThresholdBps_});
+        _recomputeLatestEligibleTimestamp(streamKey);
+
         emit AggregationConfigUpdated(subjectId, currency, quorum_, deviationThresholdBps_);
     }
 
@@ -464,8 +480,23 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
     function _latestAggregationTimestamp(bytes32 streamKey) internal view returns (uint64) {
         AggregationConfig memory config = _aggregationConfigs[streamKey];
         require(config.quorum != 0, "NAVSnapshotOracle: quorum unconfigured");
+        if (_latestEligibleTimestampSet[streamKey]) return _latestEligibleTimestamp[streamKey];
+        revert("NAVSnapshotOracle: quorum not met");
+    }
 
+    function _updateLatestEligibleTimestamp(bytes32 streamKey, uint64 valuationTimestamp) internal {
+        AggregationConfig memory config = _aggregationConfigs[streamKey];
+        if (config.quorum == 0) return;
+        if (_eligibleProviderCount(streamKey, valuationTimestamp) < config.quorum) return;
+        if (!_latestEligibleTimestampSet[streamKey] || valuationTimestamp > _latestEligibleTimestamp[streamKey]) {
+            _latestEligibleTimestampSet[streamKey] = true;
+            _latestEligibleTimestamp[streamKey] = valuationTimestamp;
+        }
+    }
+
+    function _recomputeLatestEligibleTimestamp(bytes32 streamKey) internal {
         uint64[] storage timestamps = _valuationTimestamps[streamKey];
+        AggregationConfig memory config = _aggregationConfigs[streamKey];
         bool found;
         uint64 latestTimestamp;
 
@@ -479,8 +510,13 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             }
         }
 
-        if (found) return latestTimestamp;
-        revert("NAVSnapshotOracle: quorum not met");
+        if (found) {
+            _latestEligibleTimestampSet[streamKey] = true;
+            _latestEligibleTimestamp[streamKey] = latestTimestamp;
+        } else {
+            _latestEligibleTimestampSet[streamKey] = false;
+            _latestEligibleTimestamp[streamKey] = 0;
+        }
     }
 
     function _eligibleProviderCount(bytes32 streamKey, uint64 valuationTimestamp)
@@ -659,6 +695,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
 
         uint256 denominator = _abs(medianNav);
         if (denominator == 0) return type(uint256).max;
+        if (spread > type(uint256).max / 10_000) return type(uint256).max;
 
         return (spread * 10_000) / denominator;
     }
