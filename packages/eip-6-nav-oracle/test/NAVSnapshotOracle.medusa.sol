@@ -48,6 +48,7 @@ contract NAVSnapshotOracleFuzzTest {
             bytes32 latestBasis,
             uint64 latestValuation,
             uint64 latestPublishedAt,
+            address latestProvider
         ) = oracle.latestNAV(SUBJECT, USD);
 
         bool foundExactTerminal;
@@ -55,9 +56,11 @@ contract NAVSnapshotOracleFuzzTest {
             INAVSnapshotOracle.NAVSnapshot memory snap = oracle.getSnapshot(SUBJECT, USD, i);
             if (snap.correctedByIndex != 0) continue;
             if (snap.valuationTimestamp > latestValuation) return false;
+            if (snap.valuationTimestamp == latestValuation && snap.publishedAt > latestPublishedAt) return false;
             if (
                 snap.nav == latestNav && snap.decimals == latestDecimals && snap.navBasis == latestBasis
                     && snap.valuationTimestamp == latestValuation && snap.publishedAt == latestPublishedAt
+                    && snap.provider == latestProvider
             ) {
                 foundExactTerminal = true;
             }
