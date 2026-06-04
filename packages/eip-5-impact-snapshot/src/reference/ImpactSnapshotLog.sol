@@ -6,12 +6,7 @@ import {IImpactSnapshotLog, NO_CORRECTION} from "../interfaces/IImpactSnapshotLo
 import {IImpactAttestation} from "../interfaces/IImpactAttestation.sol";
 import {IMethodologyVersioning} from "../interfaces/IMethodologyVersioning.sol";
 
-contract ImpactSnapshotLog is
-    IImpactSnapshotLog,
-    IImpactAttestation,
-    IMethodologyVersioning,
-    AccessControl
-{
+contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodologyVersioning, AccessControl {
     bytes32 public constant REPORTER_ROLE = keccak256("REPORTER");
     bytes32 public constant ATTESTOR_ROLE = keccak256("ATTESTOR");
 
@@ -37,6 +32,7 @@ contract ImpactSnapshotLog is
     mapping(bytes32 => mapping(bytes32 => bool)) private _methodologyInitialized;
 
     constructor(address admin) {
+        require(admin != address(0), "ImpactSnapshotLog: zero admin");
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(REPORTER_ROLE, admin);
         _grantRole(ATTESTOR_ROLE, admin);
@@ -47,16 +43,16 @@ contract ImpactSnapshotLog is
     // -------------------------------------------------------------------------
 
     function recordSnapshot(
-        bytes32         subjectId,
-        bytes32         indicatorId,
-        int256          value,
-        uint8           decimals,
-        bytes32         unit,
-        uint64          periodStart,
-        uint64          periodEnd,
-        bytes32         methodologyHash,
+        bytes32 subjectId,
+        bytes32 indicatorId,
+        int256 value,
+        uint8 decimals,
+        bytes32 unit,
+        uint64 periodStart,
+        uint64 periodEnd,
+        bytes32 methodologyHash,
         string calldata methodologyURI,
-        uint256         correctsIndex
+        uint256 correctsIndex
     ) external onlyRole(REPORTER_ROLE) returns (uint256 snapshotIndex) {
         require(periodStart < periodEnd, "ImpactSnapshotLog: periodStart must be < periodEnd");
 
@@ -64,19 +60,11 @@ contract ImpactSnapshotLog is
         bytes32 periodKey = keccak256(abi.encodePacked(periodStart, periodEnd));
 
         if (correctsIndex != NO_CORRECTION) {
-            require(
-                correctsIndex < _snapshots[subjectId].length,
-                "ImpactSnapshotLog: correctsIndex out of range"
-            );
+            require(correctsIndex < _snapshots[subjectId].length, "ImpactSnapshotLog: correctsIndex out of range");
             IndicatorSnapshot storage target = _snapshots[subjectId][correctsIndex];
+            require(target.correctedByIndex == 0, "ImpactSnapshotLog: target snapshot already corrected");
             require(
-                target.correctedByIndex == 0,
-                "ImpactSnapshotLog: target snapshot already corrected"
-            );
-            require(
-                target.indicatorId == indicatorId
-                    && target.periodStart == periodStart
-                    && target.periodEnd == periodEnd,
+                target.indicatorId == indicatorId && target.periodStart == periodStart && target.periodEnd == periodEnd,
                 "ImpactSnapshotLog: correction must match target period and indicator"
             );
             // correctedByIndex == 0 is also the zero-value; we disambiguate using the
@@ -96,21 +84,23 @@ contract ImpactSnapshotLog is
             );
         }
 
-        _snapshots[subjectId].push(IndicatorSnapshot({
-            subjectId:       subjectId,
-            indicatorId:     indicatorId,
-            value:           value,
-            decimals:        decimals,
-            unit:            unit,
-            periodStart:     periodStart,
-            periodEnd:       periodEnd,
-            methodologyHash: methodologyHash,
-            methodologyURI:  methodologyURI,
-            reportedBy:      msg.sender,
-            reportedAt:      uint64(block.timestamp),
-            correctsIndex:   correctsIndex,
-            correctedByIndex: 0
-        }));
+        _snapshots[subjectId].push(
+            IndicatorSnapshot({
+                subjectId: subjectId,
+                indicatorId: indicatorId,
+                value: value,
+                decimals: decimals,
+                unit: unit,
+                periodStart: periodStart,
+                periodEnd: periodEnd,
+                methodologyHash: methodologyHash,
+                methodologyURI: methodologyURI,
+                reportedBy: msg.sender,
+                reportedAt: uint64(block.timestamp),
+                correctsIndex: correctsIndex,
+                correctedByIndex: 0
+            })
+        );
 
         _indicatorIndices[subjectId][indicatorId].push(snapshotIndex);
 
@@ -119,7 +109,7 @@ contract ImpactSnapshotLog is
 
         if (!_methodologyInitialized[subjectId][indicatorId]) {
             _activeMethodologyHash[subjectId][indicatorId] = methodologyHash;
-            _activeMethodologyUri[subjectId][indicatorId]  = methodologyURI;
+            _activeMethodologyUri[subjectId][indicatorId] = methodologyURI;
             _methodologyInitialized[subjectId][indicatorId] = true;
         }
 
@@ -138,13 +128,8 @@ contract ImpactSnapshotLog is
         );
     }
 
-    function getSnapshot(bytes32 subjectId, uint256 snapshotIndex)
-        external view returns (IndicatorSnapshot memory)
-    {
-        require(
-            snapshotIndex < _snapshots[subjectId].length,
-            "ImpactSnapshotLog: snapshotIndex out of range"
-        );
+    function getSnapshot(bytes32 subjectId, uint256 snapshotIndex) external view returns (IndicatorSnapshot memory) {
+        require(snapshotIndex < _snapshots[subjectId].length, "ImpactSnapshotLog: snapshotIndex out of range");
         return _snapshots[subjectId][snapshotIndex];
     }
 
@@ -152,39 +137,33 @@ contract ImpactSnapshotLog is
         return _snapshots[subjectId].length;
     }
 
-    function indicatorSnapshotCount(bytes32 subjectId, bytes32 indicatorId)
-        external view returns (uint256)
-    {
+    function indicatorSnapshotCount(bytes32 subjectId, bytes32 indicatorId) external view returns (uint256) {
         return _indicatorIndices[subjectId][indicatorId].length;
     }
 
     function indicatorSnapshotAt(bytes32 subjectId, bytes32 indicatorId, uint256 ordinal)
-        external view returns (uint256)
+        external
+        view
+        returns (uint256)
     {
         uint256[] storage indices = _indicatorIndices[subjectId][indicatorId];
         require(ordinal < indices.length, "ImpactSnapshotLog: ordinal out of range");
         return indices[ordinal];
     }
 
-    function latestIndicatorSnapshot(bytes32 subjectId, bytes32 indicatorId)
-        external view returns (uint256)
-    {
+    function latestIndicatorSnapshot(bytes32 subjectId, bytes32 indicatorId) external view returns (uint256) {
         uint256[] storage indices = _indicatorIndices[subjectId][indicatorId];
         require(indices.length > 0, "ImpactSnapshotLog: no snapshots for indicator");
         return indices[indices.length - 1];
     }
 
-    function currentSnapshotForPeriod(
-        bytes32 subjectId,
-        bytes32 indicatorId,
-        uint64  periodStart,
-        uint64  periodEnd
-    ) external view returns (uint256) {
+    function currentSnapshotForPeriod(bytes32 subjectId, bytes32 indicatorId, uint64 periodStart, uint64 periodEnd)
+        external
+        view
+        returns (uint256)
+    {
         bytes32 periodKey = keccak256(abi.encodePacked(periodStart, periodEnd));
-        require(
-            _periodSlotSet[subjectId][indicatorId][periodKey],
-            "ImpactSnapshotLog: no snapshot for period"
-        );
+        require(_periodSlotSet[subjectId][indicatorId][periodKey], "ImpactSnapshotLog: no snapshot for period");
 
         uint256 idx = _periodSlot[subjectId][indicatorId][periodKey];
         // walk the correction chain to the terminal snapshot
@@ -199,41 +178,40 @@ contract ImpactSnapshotLog is
     // -------------------------------------------------------------------------
 
     function attestSnapshot(
-        bytes32         subjectId,
-        uint256         snapshotIndex,
-        bool            endorsed,
-        bytes32         evidenceHash,
+        bytes32 subjectId,
+        uint256 snapshotIndex,
+        bool endorsed,
+        bytes32 evidenceHash,
         string calldata evidenceURI
     ) external onlyRole(ATTESTOR_ROLE) returns (uint256 attestationIndex) {
-        require(
-            snapshotIndex < _snapshots[subjectId].length,
-            "ImpactSnapshotLog: snapshotIndex out of range"
-        );
+        require(snapshotIndex < _snapshots[subjectId].length, "ImpactSnapshotLog: snapshotIndex out of range");
         require(
             _snapshots[subjectId][snapshotIndex].reportedBy != msg.sender,
             "ImpactSnapshotLog: reporter cannot self-attest"
         );
 
         attestationIndex = _attestations[subjectId][snapshotIndex].length;
-        _attestations[subjectId][snapshotIndex].push(Attestation({
-            attestor:     msg.sender,
-            endorsed:     endorsed,
-            evidenceHash: evidenceHash,
-            evidenceURI:  evidenceURI,
-            attestedAt:   uint64(block.timestamp)
-        }));
+        _attestations[subjectId][snapshotIndex].push(
+            Attestation({
+                attestor: msg.sender,
+                endorsed: endorsed,
+                evidenceHash: evidenceHash,
+                evidenceURI: evidenceURI,
+                attestedAt: uint64(block.timestamp)
+            })
+        );
 
         emit SnapshotAttested(subjectId, snapshotIndex, msg.sender, endorsed, evidenceHash, attestationIndex);
     }
 
-    function attestationCount(bytes32 subjectId, uint256 snapshotIndex)
-        external view returns (uint256)
-    {
+    function attestationCount(bytes32 subjectId, uint256 snapshotIndex) external view returns (uint256) {
         return _attestations[subjectId][snapshotIndex].length;
     }
 
     function getAttestation(bytes32 subjectId, uint256 snapshotIndex, uint256 attestationIndex)
-        external view returns (Attestation memory)
+        external
+        view
+        returns (Attestation memory)
     {
         require(
             attestationIndex < _attestations[subjectId][snapshotIndex].length,
@@ -247,39 +225,35 @@ contract ImpactSnapshotLog is
     // -------------------------------------------------------------------------
 
     function supersedeMethodology(
-        bytes32         subjectId,
-        bytes32         indicatorId,
-        bytes32         oldMethodologyHash,
-        bytes32         newMethodologyHash,
+        bytes32 subjectId,
+        bytes32 indicatorId,
+        bytes32 oldMethodologyHash,
+        bytes32 newMethodologyHash,
         string calldata newMethodologyURI,
-        uint256         effectiveFromOrdinal
+        uint256 effectiveFromOrdinal
     ) external onlyRole(REPORTER_ROLE) {
-        require(
-            _methodologyInitialized[subjectId][indicatorId],
-            "ImpactSnapshotLog: methodology not yet initialized"
-        );
+        require(_methodologyInitialized[subjectId][indicatorId], "ImpactSnapshotLog: methodology not yet initialized");
         require(
             _activeMethodologyHash[subjectId][indicatorId] == oldMethodologyHash,
             "ImpactSnapshotLog: oldMethodologyHash does not match active methodology"
         );
         require(
-            effectiveFromOrdinal == _indicatorIndices[subjectId][indicatorId].length,
-            "ImpactSnapshotLog: effectiveFromOrdinal must equal current indicatorSnapshotCount"
+            effectiveFromOrdinal >= _indicatorIndices[subjectId][indicatorId].length,
+            "ImpactSnapshotLog: effectiveFromOrdinal must be >= current indicatorSnapshotCount"
         );
 
         _activeMethodologyHash[subjectId][indicatorId] = newMethodologyHash;
-        _activeMethodologyUri[subjectId][indicatorId]  = newMethodologyURI;
+        _activeMethodologyUri[subjectId][indicatorId] = newMethodologyURI;
 
         emit MethodologySuperseded(subjectId, indicatorId, oldMethodologyHash, newMethodologyHash, effectiveFromOrdinal);
     }
 
     function activeMethodology(bytes32 subjectId, bytes32 indicatorId)
-        external view returns (bytes32 methodologyHash, string memory methodologyURI)
+        external
+        view
+        returns (bytes32 methodologyHash, string memory methodologyURI)
     {
-        return (
-            _activeMethodologyHash[subjectId][indicatorId],
-            _activeMethodologyUri[subjectId][indicatorId]
-        );
+        return (_activeMethodologyHash[subjectId][indicatorId], _activeMethodologyUri[subjectId][indicatorId]);
     }
 
     // -------------------------------------------------------------------------
@@ -289,7 +263,6 @@ contract ImpactSnapshotLog is
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
         return interfaceId == type(IImpactSnapshotLog).interfaceId
             || interfaceId == type(IImpactAttestation).interfaceId
-            || interfaceId == type(IMethodologyVersioning).interfaceId
-            || super.supportsInterface(interfaceId);
+            || interfaceId == type(IMethodologyVersioning).interfaceId || super.supportsInterface(interfaceId);
     }
 }

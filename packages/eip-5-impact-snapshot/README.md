@@ -23,7 +23,7 @@ On-chain append-only impact snapshot log that binds structured, auditable impact
 ## Build & Test
 
 ```bash
-cd packages/eip-4-impact-snapshot
+cd packages/eip-5-impact-snapshot
 
 forge build
 forge test                # 36 unit tests, 0 failures
