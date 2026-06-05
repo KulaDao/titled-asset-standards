@@ -1,13 +1,13 @@
 ---
-eip: kula-suite
-title: Kula Protocol EIP Suite — Tokenized Asset Infrastructure Standards
-description: Six composable EIP specifications for on-chain asset registries, document anchoring, transfer governance, compliance logging, impact reporting, and NAV oracles.
-discussions-to: https://ethereum-magicians.org
-status: Draft
-type: Standards Track
-category: ERC
-created: 2025-01-01
-requires: EIP-165, EIP-20, EIP-721, EIP-1155, EIP-3643
+EIP: kula-suite
+Title: Kula Protocol EIP Suite — Tokenized Asset Infrastructure Standards
+Description: Six composable EIP specifications for on-chain asset registries, document anchoring, transfer governance, compliance logging, impact reporting, and NAV oracles.
+Discussions-To: https://ethereum-magicians.org
+Status: Draft
+Type: Standards Track
+Category: ERC
+Created: 2026-05-14
+Requires: EIP-165, ERC-20, ERC-721
 ---
 
 ## Abstract
