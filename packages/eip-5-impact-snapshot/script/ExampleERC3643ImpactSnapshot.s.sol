@@ -134,7 +134,7 @@ contract ExampleERC3643ImpactSnapshot is Script {
             console.log("All 2024 snapshots attested by ESG auditor.");
         }
 
-        vm.startBroadcast(reporterKey);
+        if (attested) vm.startBroadcast(reporterKey);
 
         // 4. H1 2025 interim report -- energy generated
         uint256 h1EnergyIdx = log.recordSnapshot(

@@ -26,7 +26,7 @@ On-chain append-only impact snapshot log that binds structured, auditable impact
 cd packages/eip-5-impact-snapshot
 
 forge build
-forge test                # 36 unit tests, 0 failures
+forge test                # 38 unit tests, 0 failures
 
 # Invariant / fuzz
 medusa fuzz --timeout 120

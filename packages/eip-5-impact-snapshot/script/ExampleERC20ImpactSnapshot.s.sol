@@ -110,7 +110,7 @@ contract ExampleERC20ImpactSnapshot is Script {
             console.log("Q1 CARBON_OFFSET attested by independent auditor.");
         }
 
-        vm.startBroadcast(reporterKey);
+        if (attested) vm.startBroadcast(reporterKey);
 
         // 4a. Q2 2025 -- Carbon offset (new period, original snapshot)
         uint256 q2CarbonIdx = log.recordSnapshot(

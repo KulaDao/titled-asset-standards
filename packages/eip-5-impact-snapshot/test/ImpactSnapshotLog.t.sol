@@ -434,7 +434,7 @@ contract ImpactSnapshotLogTest is Test {
         _record(SUBJECT_A, CARBON_OFFSET, T1, T2, NO_CORRECTION); // ordinal count = 2
 
         vm.prank(reporter);
-        vm.expectRevert("ImpactSnapshotLog: effectiveFromOrdinal must be >= current indicatorSnapshotCount");
+        vm.expectRevert("ImpactSnapshotLog: effectiveFromOrdinal must equal current indicatorSnapshotCount");
         isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "ipfs://v2", 1);
     }
 
@@ -504,16 +504,27 @@ contract ImpactSnapshotLogTest is Test {
     }
 
     // -------------------------------------------------------------------------
-    // 33. P1.3 — effectiveFromOrdinal may be ahead of current count (future scheduling)
+    // 33. P1.3 — effectiveFromOrdinal must equal current indicatorSnapshotCount
     // -------------------------------------------------------------------------
-    function test_supersedeMethodology_acceptsFutureOrdinal() public {
+    function test_supersedeMethodology_requiresExactOrdinal() public {
         _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION); // count = 1
 
         vm.prank(reporter);
-        isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "ipfs://v2", 5);
+        isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "ipfs://v2", 1);
 
         (bytes32 hash,) = isl.activeMethodology(SUBJECT_A, CARBON_OFFSET);
-        assertEq(hash, METHOD_2, "methodology must be updated even with future ordinal");
+        assertEq(hash, METHOD_2, "methodology must be updated when ordinal matches current count");
+    }
+
+    // -------------------------------------------------------------------------
+    // 33b. P1.3 — effectiveFromOrdinal ahead of current count is rejected
+    // -------------------------------------------------------------------------
+    function test_supersedeMethodology_rejectsFutureOrdinal() public {
+        _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION); // count = 1
+
+        vm.prank(reporter);
+        vm.expectRevert("ImpactSnapshotLog: effectiveFromOrdinal must equal current indicatorSnapshotCount");
+        isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "ipfs://v2", 5);
     }
 
     // -------------------------------------------------------------------------

@@ -238,8 +238,8 @@ contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodolo
             "ImpactSnapshotLog: oldMethodologyHash does not match active methodology"
         );
         require(
-            effectiveFromOrdinal >= _indicatorIndices[subjectId][indicatorId].length,
-            "ImpactSnapshotLog: effectiveFromOrdinal must be >= current indicatorSnapshotCount"
+            effectiveFromOrdinal == _indicatorIndices[subjectId][indicatorId].length,
+            "ImpactSnapshotLog: effectiveFromOrdinal must equal current indicatorSnapshotCount"
         );
 
         _activeMethodologyHash[subjectId][indicatorId] = newMethodologyHash;
