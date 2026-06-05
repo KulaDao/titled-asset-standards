@@ -28,14 +28,8 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
         bytes32 assetClass,
         bytes32 permissionEvidenceHash
     ) public override onlyRole(REGISTRAR_ROLE) {
-        bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
-        delete _revocations[key];
-        uint64 effectiveAt = _now64();
-
-        _routes[key] =
-            Route({permitted: true, effectiveAt: effectiveAt, permissionEvidenceHash: permissionEvidenceHash});
-
-        emit RouteSet(sourceDomain, destinationDomain, assetClass, permissionEvidenceHash, effectiveAt);
+        delete _revocations[_routeKey(sourceDomain, destinationDomain, assetClass)];
+        super.setRoute(sourceDomain, destinationDomain, assetClass, permissionEvidenceHash);
     }
 
     function revokeRoute(
@@ -44,14 +38,8 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
         bytes32 assetClass,
         bytes32 revocationEvidenceHash
     ) public override onlyRole(REGISTRAR_ROLE) {
-        bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
-        delete _revocations[key];
-        uint64 effectiveAt = _now64();
-
-        _routes[key].permitted = false;
-        _routes[key].effectiveAt = effectiveAt;
-
-        emit RouteRevoked(sourceDomain, destinationDomain, assetClass, revocationEvidenceHash, effectiveAt);
+        delete _revocations[_routeKey(sourceDomain, destinationDomain, assetClass)];
+        super.revokeRoute(sourceDomain, destinationDomain, assetClass, revocationEvidenceHash);
     }
 
     function initiateRevocation(
@@ -101,10 +89,7 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
         emit RouteRevocationCancelled(sourceDomain, destinationDomain, assetClass, cancellationEvidenceHash);
     }
 
-    function finalizeRevocation(bytes32 sourceDomain, bytes32 destinationDomain, bytes32 assetClass)
-        external
-        onlyRole(REGISTRAR_ROLE)
-    {
+    function finalizeRevocation(bytes32 sourceDomain, bytes32 destinationDomain, bytes32 assetClass) external {
         bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
         Revocation storage revocation = _revocations[key];
 

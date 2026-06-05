@@ -22,12 +22,17 @@ ERC-721, ERC-1155, ERC-3643, ERC-7943, or application-specific transfer logic.
   - `setRoute()` only enables routes
   - `revokeRoute()` is the only core disable path
   - `getRoute()` exposes route state
-  - `isRoutePermittedBatch()` provides batch lookups
+  - `isRoutePermittedBatch()` provides batch lookups; the reference implementation
+    caps each batch at 256 routes
 
 - `IGracefulRouteRevocation`
   - optional extension for delayed revocation
   - exposes pending/finalized revocation state
+  - `finalized` guards duplicate finalization events; route permission is
+    determined lazily from `pending` and `effectiveAt`
   - supports cancellation before the grace period expires
+  - finalization is permissionless in the reference implementation because
+    revocation is already effective once the grace period expires
   - lazy expiry means a route is functionally revoked once
     `block.timestamp >= effectiveAt`, even before finalization
 
@@ -37,6 +42,7 @@ ERC-721, ERC-1155, ERC-3643, ERC-7943, or application-specific transfer logic.
   - immediate route set/revoke registry
   - role-based registrar access through OpenZeppelin `AccessControl`
   - ERC-165 support for `ITransferDomainRegistry`
+  - reference batch lookups are capped at `MAX_BATCH_SIZE = 256`
 
 - `GracefulTransferDomainRegistry`
   - extends `TransferDomainRegistry`

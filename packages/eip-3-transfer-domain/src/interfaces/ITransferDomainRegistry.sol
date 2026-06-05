@@ -59,6 +59,8 @@ interface ITransferDomainRegistry {
 
     /// @notice Bulk query for multiple routes.
     /// @dev MUST revert if input arrays differ in length.
+    ///      Implementations MAY cap batch length. Consumers calling this from
+    ///      state-changing functions SHOULD bound input length to avoid unbounded gas.
     function isRoutePermittedBatch(
         bytes32[] calldata sourceDomains,
         bytes32[] calldata destinationDomains,

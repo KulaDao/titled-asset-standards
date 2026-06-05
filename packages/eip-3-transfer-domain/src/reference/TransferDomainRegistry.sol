@@ -7,6 +7,7 @@ import {TransferRouteLib} from "../libraries/TransferRouteLib.sol";
 
 contract TransferDomainRegistry is ITransferDomainRegistry, AccessControl {
     bytes32 public constant REGISTRAR_ROLE = keccak256("REGISTRAR");
+    uint256 public constant MAX_BATCH_SIZE = 256;
 
     mapping(bytes32 => Route) internal _routes;
 
@@ -69,13 +70,15 @@ contract TransferDomainRegistry is ITransferDomainRegistry, AccessControl {
         bytes32[] calldata destinationDomains,
         bytes32[] calldata assetClasses
     ) external view returns (bool[] memory permitted) {
+        uint256 length = sourceDomains.length;
         require(
-            sourceDomains.length == destinationDomains.length && destinationDomains.length == assetClasses.length,
+            length == destinationDomains.length && destinationDomains.length == assetClasses.length,
             "TransferDomainRegistry: array length mismatch"
         );
+        require(length <= MAX_BATCH_SIZE, "TransferDomainRegistry: batch too large");
 
-        permitted = new bool[](sourceDomains.length);
-        for (uint256 i = 0; i < sourceDomains.length; i++) {
+        permitted = new bool[](length);
+        for (uint256 i = 0; i < length; i++) {
             permitted[i] = _isRoutePermitted(_routeKey(sourceDomains[i], destinationDomains[i], assetClasses[i]));
         }
     }

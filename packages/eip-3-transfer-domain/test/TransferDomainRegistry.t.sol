@@ -218,6 +218,16 @@ contract TransferDomainRegistryTest is Test {
         registry.isRoutePermittedBatch(sources, destinations, assets);
     }
 
+    function test_isRoutePermittedBatch_revertsAboveMaxBatchSize() public {
+        uint256 length = registry.MAX_BATCH_SIZE() + 1;
+        bytes32[] memory sources = new bytes32[](length);
+        bytes32[] memory destinations = new bytes32[](length);
+        bytes32[] memory assets = new bytes32[](length);
+
+        vm.expectRevert("TransferDomainRegistry: batch too large");
+        registry.isRoutePermittedBatch(sources, destinations, assets);
+    }
+
     function test_supportsInterface() public {
         assertTrue(registry.supportsInterface(type(ITransferDomainRegistry).interfaceId));
         assertTrue(registry.supportsInterface(type(IERC165).interfaceId));

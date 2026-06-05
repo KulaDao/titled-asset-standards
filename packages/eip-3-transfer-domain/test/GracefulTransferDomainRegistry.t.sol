@@ -185,6 +185,28 @@ contract GracefulTransferDomainRegistryTest is Test {
         registry.finalizeRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
     }
 
+    function test_finalizeRevocation_isPermissionlessAfterGracePeriod() public {
+        vm.warp(1_000_000);
+        _setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
+        _initiate(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+
+        IGracefulRouteRevocation.Revocation memory beforeFinalize =
+            registry.getRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+
+        vm.warp(beforeFinalize.effectiveAt);
+        vm.prank(other);
+        registry.finalizeRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+
+        IGracefulRouteRevocation.Revocation memory afterFinalize =
+            registry.getRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+        ITransferDomainRegistry.Route memory route = registry.getRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+
+        assertFalse(afterFinalize.pending);
+        assertTrue(afterFinalize.finalized);
+        assertFalse(route.permitted);
+        assertEq(route.effectiveAt, beforeFinalize.effectiveAt);
+    }
+
     function test_finalizeRevocation_revertsBeforeGracePeriodExpires() public {
         _setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
         _initiate(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
@@ -260,6 +282,38 @@ contract GracefulTransferDomainRegistryTest is Test {
         assertFalse(registry.isRoutePermitted(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL));
         assertFalse(revocation.pending);
         assertFalse(revocation.finalized);
+    }
+
+    function test_setRouteDuringActiveGracePeriodClearsPendingRevocation() public {
+        vm.warp(1_000_000);
+        _setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
+        _initiate(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+
+        IGracefulRouteRevocation.Revocation memory beforeReset =
+            registry.getRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+
+        assertTrue(beforeReset.pending);
+        assertFalse(beforeReset.finalized);
+        assertTrue(registry.isRoutePermitted(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL));
+
+        vm.warp(beforeReset.effectiveAt - 1);
+        uint64 expectedEffectiveAt = uint64(block.timestamp);
+        _setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE_2);
+
+        IGracefulRouteRevocation.Revocation memory reset = registry.getRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+        ITransferDomainRegistry.Route memory route = registry.getRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+
+        assertTrue(route.permitted);
+        assertEq(route.effectiveAt, expectedEffectiveAt);
+        assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE_2);
+        assertEq(reset.initiatedAt, 0);
+        assertEq(reset.effectiveAt, 0);
+        assertEq(reset.revocationEvidenceHash, bytes32(0));
+        assertFalse(reset.pending);
+        assertFalse(reset.finalized);
+
+        vm.warp(beforeReset.effectiveAt);
+        assertTrue(registry.isRoutePermitted(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL));
     }
 
     function test_setRouteAfterFinalizedRevocationReenablesAndClearsRevocationState() public {

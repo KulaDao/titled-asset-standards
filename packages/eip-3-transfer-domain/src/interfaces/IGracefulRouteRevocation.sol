@@ -7,6 +7,7 @@ interface IGracefulRouteRevocation {
         uint64 effectiveAt;
         bytes32 revocationEvidenceHash;
         bool pending;
+        // Guards duplicate finalization and RouteRevoked emission; route permission is determined lazily.
         bool finalized;
     }
 
@@ -54,5 +55,6 @@ interface IGracefulRouteRevocation {
     /// @notice Finalize a revocation after the grace period.
     /// @dev MUST revert if the grace period has not expired or if already finalized.
     ///      MUST emit RouteRevoked from the base interface.
+    ///      MAY be permissionless because revocation effectiveness is lazy and does not depend on finalization.
     function finalizeRevocation(bytes32 sourceDomain, bytes32 destinationDomain, bytes32 assetClass) external;
 }
