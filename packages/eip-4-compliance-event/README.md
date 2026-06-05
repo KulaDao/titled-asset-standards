@@ -14,6 +14,8 @@ evidence links, payload profiles, type indexing, and correction provenance.
 - Event indices are scoped per `subjectId`.
 - `recordEvent()` is restricted to `RECORDER_ROLE`.
 - Records are append-only. Existing fields are never mutated except `correctedByIndex`.
+- `correctedByIndex == 0` means "not corrected"; when corrected, the target event's `correctedByIndex`
+  is set to the correction event index.
 - Corrections are fork-free and must use `EVT_CORRECTION`.
 - A normal recorder can correct only events it originally recorded; an admin can correct any event.
 - `occurredAt` must not be in the future and must be within the reference implementation's 30-day backdating window.
