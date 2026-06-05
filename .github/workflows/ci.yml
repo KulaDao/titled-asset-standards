@@ -178,6 +178,7 @@ jobs:
       matrix:
         package:
           - eip-2-document-bundle
+          - eip-4-compliance-event
           - eip-5-impact-snapshot
 
     steps:
