@@ -22,7 +22,6 @@ contract ComplianceEventLogFuzzTest {
 
     bytes32 internal constant SUBJECT = keccak256("subject");
     bytes32[2] internal eventTypes = [EVT_TRANSFER, EVT_FREEZE];
-    uint64 internal timestamp = 1_700_000_000;
 
     constructor() {
         log = new ComplianceEventLog(address(this));
@@ -36,6 +35,7 @@ contract ComplianceEventLogFuzzTest {
 
     function fuzz_recordOriginal(uint8 eventTypeIndex) external {
         eventTypeIndex = eventTypeIndex % 2;
+        uint64 occurredAt = _occurredAt();
         try log.recordEvent{gas: 700_000}(
             SUBJECT,
             SUBJECT_TOKEN,
@@ -48,7 +48,7 @@ contract ComplianceEventLogFuzzTest {
             PAYLOAD_TRANSFER_V1,
             "",
             bytes32(0),
-            timestamp,
+            occurredAt,
             NO_CORRECTION
         ) {}
             catch {}
@@ -61,8 +61,8 @@ contract ComplianceEventLogFuzzTest {
 
         IComplianceEventLog.ComplianceEvent memory target = log.getEvent(SUBJECT, targetIndex);
         if (target.correctedByIndex != 0) return;
-        if (target.actor != address(this)) return;
 
+        uint64 occurredAt = _occurredAt();
         try log.recordEvent{gas: 700_000}(
             SUBJECT,
             SUBJECT_TOKEN,
@@ -75,7 +75,7 @@ contract ComplianceEventLogFuzzTest {
             PAYLOAD_TRANSFER_V1,
             abi.encode(target.eventType, targetIndex),
             bytes32(0),
-            timestamp,
+            occurredAt,
             targetIndex
         ) {}
             catch {}
@@ -121,5 +121,10 @@ contract ComplianceEventLogFuzzTest {
             parties = new IComplianceEventLog.Party[](1);
             parties[0] = IComplianceEventLog.Party({addr: address(0xAA), role: ROLE_TARGET});
         }
+    }
+
+    function _occurredAt() internal view returns (uint64) {
+        if (block.timestamp > type(uint64).max) return type(uint64).max;
+        return uint64(block.timestamp);
     }
 }
