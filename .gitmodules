@@ -13,3 +13,6 @@
 [submodule "packages/eip-5-impact-snapshot/lib/forge-std"]
 	path = packages/eip-5-impact-snapshot/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "packages/eip-4-compliance-event/lib/forge-std"]
+	path = packages/eip-4-compliance-event/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
