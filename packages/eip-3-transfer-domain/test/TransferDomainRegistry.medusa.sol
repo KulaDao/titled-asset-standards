@@ -24,6 +24,7 @@ contract TransferDomainRegistryFuzzTest {
         bool permitted;
         uint64 effectiveAt;
         bytes32 permissionEvidenceHash;
+        bytes32 routeRevocationEvidenceHash;
         uint64 revocationInitiatedAt;
         uint64 revocationEffectiveAt;
         bytes32 revocationEvidenceHash;
@@ -64,6 +65,7 @@ contract TransferDomainRegistryFuzzTest {
         expected.permitted = true;
         expected.effectiveAt = _now64();
         expected.permissionEvidenceHash = evidenceHash;
+        expected.routeRevocationEvidenceHash = bytes32(0);
         expected.revocationInitiatedAt = 0;
         expected.revocationEffectiveAt = 0;
         expected.revocationEvidenceHash = bytes32(0);
@@ -83,6 +85,7 @@ contract TransferDomainRegistryFuzzTest {
         ModelRoute storage expected = model[key];
         expected.permitted = false;
         expected.effectiveAt = _now64();
+        expected.routeRevocationEvidenceHash = evidenceHash;
         expected.revocationInitiatedAt = 0;
         expected.revocationEffectiveAt = 0;
         expected.revocationEvidenceHash = bytes32(0);
@@ -140,6 +143,7 @@ contract TransferDomainRegistryFuzzTest {
 
         expected.permitted = false;
         expected.effectiveAt = expected.revocationEffectiveAt;
+        expected.routeRevocationEvidenceHash = expected.revocationEvidenceHash;
         expected.revocationPending = false;
         expected.revocationFinalized = true;
     }
@@ -156,6 +160,7 @@ contract TransferDomainRegistryFuzzTest {
                     if (actual.permitted != expectedPermitted) return false;
                     if (actual.effectiveAt != expectedEffectiveAt) return false;
                     if (actual.permissionEvidenceHash != expected.permissionEvidenceHash) return false;
+                    if (actual.revocationEvidenceHash != _expectedRouteRevocationEvidence(expected)) return false;
                     if (registry.isRoutePermitted(source, destination, assetClass) != expectedPermitted) return false;
                 }
             }
@@ -232,6 +237,13 @@ contract TransferDomainRegistryFuzzTest {
         if (route.revocationPending && block.timestamp >= route.revocationEffectiveAt) {
             effectiveAt = route.revocationEffectiveAt;
         }
+    }
+
+    function _expectedRouteRevocationEvidence(ModelRoute memory route) internal view returns (bytes32) {
+        if (route.revocationPending && block.timestamp >= route.revocationEffectiveAt) {
+            return route.revocationEvidenceHash;
+        }
+        return route.routeRevocationEvidenceHash;
     }
 
     function _now64() internal view returns (uint64) {

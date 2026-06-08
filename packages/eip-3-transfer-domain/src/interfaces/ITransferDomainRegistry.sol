@@ -6,6 +6,7 @@ interface ITransferDomainRegistry {
         bool permitted;
         uint64 effectiveAt;
         bytes32 permissionEvidenceHash;
+        bytes32 revocationEvidenceHash;
     }
 
     event RouteSet(
@@ -33,6 +34,7 @@ interface ITransferDomainRegistry {
         returns (bool);
 
     /// @notice Retrieve the full route state.
+    /// @dev revocationEvidenceHash is bytes32(0) until the route has been revoked.
     function getRoute(bytes32 sourceDomain, bytes32 destinationDomain, bytes32 assetClass)
         external
         view

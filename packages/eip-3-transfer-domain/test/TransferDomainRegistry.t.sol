@@ -71,6 +71,7 @@ contract TransferDomainRegistryTest is Test {
         assertTrue(route.permitted);
         assertEq(route.effectiveAt, uint64(1_000_000));
         assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE);
+        assertEq(route.revocationEvidenceHash, bytes32(0));
         assertTrue(registry.isRoutePermitted(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL));
     }
 
@@ -119,6 +120,7 @@ contract TransferDomainRegistryTest is Test {
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, 0);
         assertEq(route.permissionEvidenceHash, bytes32(0));
+        assertEq(route.revocationEvidenceHash, bytes32(0));
     }
 
     function test_revokeRoute_disablesRouteAndEmits() public {
@@ -136,6 +138,7 @@ contract TransferDomainRegistryTest is Test {
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, uint64(2_000_000));
         assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE);
+        assertEq(route.revocationEvidenceHash, REVOCATION_EVIDENCE);
         assertFalse(registry.isRoutePermitted(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL));
     }
 
@@ -153,6 +156,7 @@ contract TransferDomainRegistryTest is Test {
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, uint64(3_000_000));
         assertEq(route.permissionEvidenceHash, bytes32(0));
+        assertEq(route.revocationEvidenceHash, REVOCATION_EVIDENCE);
     }
 
     function test_revokeRoute_revertsZeroRevocationEvidenceHash() public {
@@ -170,7 +174,10 @@ contract TransferDomainRegistryTest is Test {
         vm.prank(registrar);
         registry.revokeRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, keccak256("second-revocation"));
 
+        ITransferDomainRegistry.Route memory route = registry.getRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+
         assertFalse(registry.isRoutePermitted(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL));
+        assertEq(route.revocationEvidenceHash, keccak256("second-revocation"));
     }
 
     function test_setRoute_reenablesRevokedRouteWithNewPermissionEvidence() public {
@@ -187,6 +194,7 @@ contract TransferDomainRegistryTest is Test {
         assertTrue(route.permitted);
         assertEq(route.effectiveAt, uint64(4_000_000));
         assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE_2);
+        assertEq(route.revocationEvidenceHash, bytes32(0));
     }
 
     function test_isRoutePermittedBatch_returnsIndependentResults() public {

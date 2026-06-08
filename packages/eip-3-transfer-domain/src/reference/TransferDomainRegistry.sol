@@ -46,8 +46,12 @@ contract TransferDomainRegistry is ITransferDomainRegistry, AccessControl {
         bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
         uint64 effectiveAt = _now64();
 
-        _routes[key] =
-            Route({permitted: true, effectiveAt: effectiveAt, permissionEvidenceHash: permissionEvidenceHash});
+        _routes[key] = Route({
+            permitted: true,
+            effectiveAt: effectiveAt,
+            permissionEvidenceHash: permissionEvidenceHash,
+            revocationEvidenceHash: bytes32(0)
+        });
 
         emit RouteSet(sourceDomain, destinationDomain, assetClass, permissionEvidenceHash, effectiveAt);
     }
@@ -65,6 +69,7 @@ contract TransferDomainRegistry is ITransferDomainRegistry, AccessControl {
 
         _routes[key].permitted = false;
         _routes[key].effectiveAt = effectiveAt;
+        _routes[key].revocationEvidenceHash = revocationEvidenceHash;
 
         emit RouteRevoked(sourceDomain, destinationDomain, assetClass, revocationEvidenceHash, effectiveAt);
     }
