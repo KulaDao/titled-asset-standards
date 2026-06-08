@@ -5,8 +5,20 @@ import {ImpactSnapshotLog} from "../src/reference/ImpactSnapshotLog.sol";
 import {IImpactSnapshotLog, NO_CORRECTION} from "../src/interfaces/IImpactSnapshotLog.sol";
 import {CARBON_OFFSET, ENERGY_GENERATED, UNIT_TCO2E} from "../src/libraries/ImpactConstants.sol";
 
+contract ImpactAttestorActor {
+    ImpactSnapshotLog internal immutable isl;
+
+    constructor(ImpactSnapshotLog isl_) {
+        isl = isl_;
+    }
+
+    function attest(bytes32 subjectId, uint256 snapshotIdx) external {
+        isl.attestSnapshot(subjectId, snapshotIdx, true, keccak256("evidence"), "ipfs://ev");
+    }
+}
+
 /// @dev Medusa fuzz harness for ImpactSnapshotLog.
-///      Run: medusa fuzz (from packages/eip-4-impact-snapshot)
+///      Run: medusa fuzz (from packages/eip-5-impact-snapshot)
 ///
 ///      Invariants checked after every call sequence:
 ///        property_currentPeriodSnapshotIsAlwaysTerminal
@@ -15,28 +27,28 @@ import {CARBON_OFFSET, ENERGY_GENERATED, UNIT_TCO2E} from "../src/libraries/Impa
 ///        property_activeMethodologyNonZeroOnceInitialized
 contract ImpactSnapshotLogFuzzTest {
     ImpactSnapshotLog internal isl;
+    ImpactAttestorActor internal attestorActor;
 
     bytes32 internal constant SUBJECT_A = keccak256("subject-a");
     bytes32 internal constant SUBJECT_B = keccak256("subject-b");
-    bytes32 internal constant METHOD_1  = keccak256("method-v1");
-    bytes32 internal constant METHOD_2  = keccak256("method-v2");
+    bytes32 internal constant METHOD_1 = keccak256("method-v1");
+    bytes32 internal constant METHOD_2 = keccak256("method-v2");
 
     bytes32[2] internal indicators = [CARBON_OFFSET, ENERGY_GENERATED];
-    bytes32[2] internal subjects   = [SUBJECT_A, SUBJECT_B];
+    bytes32[2] internal subjects = [SUBJECT_A, SUBJECT_B];
 
     // tracks per-(subjectId, indicatorId, periodKey) whether an original exists
     mapping(bytes32 => bool) internal _periodOccupied;
     // minimum snapshot count ever seen (for monotonicity check)
     mapping(bytes32 => uint256) internal _minSnapshotCount;
 
-    uint64 internal _ts = 1_000_000;
-
     constructor() {
         // Deploy with address(this) as admin so the harness can call grantRole.
         isl = new ImpactSnapshotLog(address(this));
+        attestorActor = new ImpactAttestorActor(isl);
         bytes32 reporterRole = isl.REPORTER_ROLE();
         bytes32 attestorRole = isl.ATTESTOR_ROLE();
-        bytes32 adminRole    = isl.DEFAULT_ADMIN_ROLE();
+        bytes32 adminRole = isl.DEFAULT_ADMIN_ROLE();
         // Grant roles to all Medusa sender addresses.
         isl.grantRole(reporterRole, address(0x10000));
         isl.grantRole(reporterRole, address(0x20000));
@@ -44,34 +56,27 @@ contract ImpactSnapshotLogFuzzTest {
         isl.grantRole(attestorRole, address(0x10000));
         isl.grantRole(attestorRole, address(0x20000));
         isl.grantRole(attestorRole, address(0x30000));
-        isl.grantRole(adminRole,    address(0x10000));
-        isl.grantRole(adminRole,    address(0x20000));
-        isl.grantRole(adminRole,    address(0x30000));
+        isl.grantRole(attestorRole, address(attestorActor));
+        isl.grantRole(adminRole, address(0x10000));
+        isl.grantRole(adminRole, address(0x20000));
+        isl.grantRole(adminRole, address(0x30000));
     }
 
     // ── State-mutating functions Medusa will call randomly ──────────────
 
-    function fuzz_advanceTime(uint32 delta) external {
-        if (delta == 0 || delta > 30 days) return;
-        _ts += delta;
-    }
-
-    function fuzz_recordOriginal(
-        uint8  subjectIdx,
-        uint8  indicatorIdx,
-        uint32 periodOffset,
-        uint32 periodLength
-    ) external {
+    function fuzz_recordOriginal(uint8 subjectIdx, uint8 indicatorIdx, uint32 periodOffset, uint32 periodLength)
+        external
+    {
         if (periodLength == 0) return;
-        subjectIdx   = subjectIdx   % 2;
+        subjectIdx = subjectIdx % 2;
         indicatorIdx = indicatorIdx % 2;
 
-        bytes32 subjectId   = subjects[subjectIdx];
+        bytes32 subjectId = subjects[subjectIdx];
         bytes32 indicatorId = indicators[indicatorIdx];
-        uint64  start       = _ts + periodOffset;
-        uint64  end         = start + periodLength;
-        bytes32 periodKey   = keccak256(abi.encodePacked(start, end));
-        bytes32 slotKey     = keccak256(abi.encode(subjectId, indicatorId, periodKey));
+        (bool ok, uint64 start, uint64 end) = _completedPeriod(periodOffset, periodLength);
+        if (!ok) return;
+        bytes32 periodKey = keccak256(abi.encodePacked(start, end));
+        bytes32 slotKey = keccak256(abi.encode(subjectId, indicatorId, periodKey));
 
         if (_periodOccupied[slotKey]) return;
 
@@ -87,16 +92,10 @@ contract ImpactSnapshotLogFuzzTest {
         } catch {}
     }
 
-    function fuzz_recordCorrection(
-        uint8   subjectIdx,
-        uint256 targetIndex,
-        uint8   indicatorIdx,
-        uint32  periodOffset,
-        uint32  periodLength
-    ) external {
-        subjectIdx   = subjectIdx   % 2;
+    function fuzz_recordCorrection(uint8 subjectIdx, uint256 targetIndex, uint8 indicatorIdx) external {
+        subjectIdx = subjectIdx % 2;
         indicatorIdx = indicatorIdx % 2;
-        bytes32 subjectId   = subjects[subjectIdx];
+        bytes32 subjectId = subjects[subjectIdx];
         bytes32 indicatorId = indicators[indicatorIdx];
 
         uint256 count = isl.snapshotCount(subjectId);
@@ -111,19 +110,20 @@ contract ImpactSnapshotLogFuzzTest {
         bytes32 method = (activeHash != bytes32(0)) ? activeHash : METHOD_1;
 
         uint64 start = target.periodStart;
-        uint64 end   = target.periodEnd;
+        uint64 end = target.periodEnd;
 
         try isl.recordSnapshot{gas: 500_000}(
             subjectId, indicatorId, 200, 2, UNIT_TCO2E, start, end, method, "ipfs://v1", targetIndex
         ) {
-            // snapshot recorded
-        } catch {}
+        // snapshot recorded
+        }
+            catch {}
     }
 
     function fuzz_supersedeMethodology(uint8 subjectIdx, uint8 indicatorIdx) external {
-        subjectIdx   = subjectIdx   % 2;
+        subjectIdx = subjectIdx % 2;
         indicatorIdx = indicatorIdx % 2;
-        bytes32 subjectId   = subjects[subjectIdx];
+        bytes32 subjectId = subjects[subjectIdx];
         bytes32 indicatorId = indicators[indicatorIdx];
 
         (bytes32 activeHash,) = isl.activeMethodology(subjectId, indicatorId);
@@ -134,7 +134,8 @@ contract ImpactSnapshotLogFuzzTest {
 
         try isl.supersedeMethodology{gas: 200_000}(
             subjectId, indicatorId, activeHash, METHOD_2, "ipfs://v2", ordinal
-        ) {} catch {}
+        ) {}
+            catch {}
     }
 
     function fuzz_attest(uint8 subjectIdx, uint256 snapshotIdx) external {
@@ -145,7 +146,7 @@ contract ImpactSnapshotLogFuzzTest {
         if (count == 0) return;
         snapshotIdx = snapshotIdx % count;
 
-        try isl.attestSnapshot{gas: 200_000}(subjectId, snapshotIdx, true, keccak256("evidence"), "ipfs://ev") {} catch {}
+        try attestorActor.attest{gas: 200_000}(subjectId, snapshotIdx) {} catch {}
     }
 
     // ── property_ functions — return false to signal failure ───────────
@@ -154,14 +155,15 @@ contract ImpactSnapshotLogFuzzTest {
     function property_currentPeriodSnapshotIsAlwaysTerminal() external view returns (bool) {
         for (uint8 si = 0; si < 2; si++) {
             for (uint8 ii = 0; ii < 2; ii++) {
-                bytes32 subjectId   = subjects[si];
+                bytes32 subjectId = subjects[si];
                 bytes32 indicatorId = indicators[ii];
                 uint256 count = isl.indicatorSnapshotCount(subjectId, indicatorId);
                 for (uint256 o = 0; o < count; o++) {
                     uint256 globalIdx = isl.indicatorSnapshotAt(subjectId, indicatorId, o);
                     IImpactSnapshotLog.IndicatorSnapshot memory snap = isl.getSnapshot(subjectId, globalIdx);
                     if (snap.correctedByIndex != 0) continue;
-                    uint256 current = isl.currentSnapshotForPeriod(subjectId, indicatorId, snap.periodStart, snap.periodEnd);
+                    uint256 current =
+                        isl.currentSnapshotForPeriod(subjectId, indicatorId, snap.periodStart, snap.periodEnd);
                     IImpactSnapshotLog.IndicatorSnapshot memory cur = isl.getSnapshot(subjectId, current);
                     if (cur.correctedByIndex != 0) return false;
                 }
@@ -179,7 +181,8 @@ contract ImpactSnapshotLogFuzzTest {
             for (uint256 i = 0; i < total; i++) {
                 IImpactSnapshotLog.IndicatorSnapshot memory snap = isl.getSnapshot(subjectId, i);
                 if (snap.correctedByIndex == 0) continue;
-                uint256 current = isl.currentSnapshotForPeriod(subjectId, snap.indicatorId, snap.periodStart, snap.periodEnd);
+                uint256 current =
+                    isl.currentSnapshotForPeriod(subjectId, snap.indicatorId, snap.periodStart, snap.periodEnd);
                 if (current == i) return false;
             }
         }
@@ -201,7 +204,7 @@ contract ImpactSnapshotLogFuzzTest {
     function property_activeMethodologyNonZeroOnceInitialized() external view returns (bool) {
         for (uint8 si = 0; si < 2; si++) {
             for (uint8 ii = 0; ii < 2; ii++) {
-                bytes32 subjectId   = subjects[si];
+                bytes32 subjectId = subjects[si];
                 bytes32 indicatorId = indicators[ii];
                 uint256 count = isl.indicatorSnapshotCount(subjectId, indicatorId);
                 if (count == 0) continue;
@@ -210,5 +213,23 @@ contract ImpactSnapshotLogFuzzTest {
             }
         }
         return true;
+    }
+
+    function _completedPeriod(uint32 periodOffset, uint32 periodLength)
+        internal
+        view
+        returns (bool ok, uint64 start, uint64 end)
+    {
+        if (periodLength == 0) return (false, 0, 0);
+        uint256 nowTs = block.timestamp;
+        if (nowTs > type(uint64).max) return (false, 0, 0);
+        uint256 totalLookback = uint256(periodOffset) + uint256(periodLength);
+        if (nowTs <= totalLookback) return (false, 0, 0);
+
+        uint256 endTs = nowTs - uint256(periodOffset);
+        // forge-lint: disable-next-line(unsafe-typecast)
+        end = uint64(endTs);
+        start = uint64(uint256(end) - uint256(periodLength));
+        return (true, start, end);
     }
 }
