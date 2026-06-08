@@ -60,6 +60,7 @@ contract ImpactSnapshotLogTest is Test {
 
     address admin = address(0xA0);
     address reporter = address(0xA1);
+    address reporter2 = address(0xA3);
     address attestor = address(0xA2);
 
     bytes32 constant SUBJECT_A = keccak256("subject-a");
@@ -76,6 +77,7 @@ contract ImpactSnapshotLogTest is Test {
         isl = new ImpactSnapshotLog(admin);
         vm.startPrank(admin);
         isl.grantRole(isl.REPORTER_ROLE(), reporter);
+        isl.grantRole(isl.REPORTER_ROLE(), reporter2);
         isl.grantRole(isl.ATTESTOR_ROLE(), attestor);
         vm.stopPrank();
     }
@@ -84,9 +86,27 @@ contract ImpactSnapshotLogTest is Test {
         internal
         returns (uint256)
     {
+        if (block.timestamp < end) vm.warp(end);
         vm.prank(reporter);
         return isl.recordSnapshot(
             subjectId, indicatorId, 100, 2, UNIT_TCO2E, start, end, METHOD_1, "ipfs://v1", correctsIndex
+        );
+    }
+
+    function _recordAs(
+        address account,
+        bytes32 subjectId,
+        bytes32 indicatorId,
+        uint64 start,
+        uint64 end,
+        uint256 correctsIndex,
+        bytes32 methodologyHash,
+        string memory methodologyURI
+    ) internal returns (uint256) {
+        if (block.timestamp < end) vm.warp(end);
+        vm.prank(account);
+        return isl.recordSnapshot(
+            subjectId, indicatorId, 100, 2, UNIT_TCO2E, start, end, methodologyHash, methodologyURI, correctsIndex
         );
     }
 
@@ -111,7 +131,7 @@ contract ImpactSnapshotLogTest is Test {
         assertEq(snap.methodologyHash, METHOD_1, "methodologyHash mismatch");
         assertEq(snap.methodologyURI, "ipfs://v1", "methodologyURI mismatch");
         assertEq(snap.reportedBy, reporter, "reportedBy mismatch");
-        assertEq(snap.reportedAt, T0, "reportedAt mismatch");
+        assertEq(snap.reportedAt, T1, "reportedAt mismatch");
         assertEq(snap.correctsIndex, NO_CORRECTION, "correctsIndex must be NO_CORRECTION");
         assertEq(snap.correctedByIndex, 0, "correctedByIndex must be 0");
     }
@@ -142,13 +162,35 @@ contract ImpactSnapshotLogTest is Test {
         isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 100, 2, UNIT_TCO2E, T0, T0, METHOD_1, "", NO_CORRECTION);
     }
 
+    function test_recordSnapshot_revertsIncompletePeriod() public {
+        vm.warp(T1 - 1);
+        vm.prank(reporter);
+        vm.expectRevert("ImpactSnapshotLog: incomplete period");
+        isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 100, 2, UNIT_TCO2E, T0, T1, METHOD_1, "ipfs://v1", NO_CORRECTION);
+    }
+
+    function test_recordSnapshot_revertsZeroMethodologyHash() public {
+        vm.warp(T1);
+        vm.prank(reporter);
+        vm.expectRevert("ImpactSnapshotLog: zero methodology");
+        isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 100, 2, UNIT_TCO2E, T0, T1, bytes32(0), "ipfs://v1", NO_CORRECTION);
+    }
+
+    function test_recordSnapshot_revertsEmptyMethodologyURI() public {
+        vm.warp(T1);
+        vm.prank(reporter);
+        vm.expectRevert("ImpactSnapshotLog: empty methodology URI");
+        isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 100, 2, UNIT_TCO2E, T0, T1, METHOD_1, "", NO_CORRECTION);
+    }
+
     // -------------------------------------------------------------------------
     // 4. test_recordSnapshot_revertsInvalidCorrectionTarget
     // -------------------------------------------------------------------------
     function test_recordSnapshot_revertsInvalidCorrectionTarget() public {
+        vm.warp(T1);
         vm.prank(reporter);
         vm.expectRevert("ImpactSnapshotLog: correctsIndex out of range");
-        isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 100, 2, UNIT_TCO2E, T0, T1, METHOD_1, "", 99);
+        isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 100, 2, UNIT_TCO2E, T0, T1, METHOD_1, "ipfs://v1", 99);
     }
 
     // -------------------------------------------------------------------------
@@ -168,6 +210,28 @@ contract ImpactSnapshotLogTest is Test {
         assertEq(correction.correctedByIndex, 0, "correction must not itself be corrected");
     }
 
+    function test_recordSnapshot_revertsCorrectionByDifferentReporter() public {
+        _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION);
+
+        vm.prank(reporter2);
+        vm.expectRevert("ImpactSnapshotLog: correction not authorized");
+        isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 200, 2, UNIT_TCO2E, T0, T1, METHOD_1, "ipfs://v1", 0);
+    }
+
+    function test_recordSnapshot_adminCanCorrectDifferentReporter() public {
+        _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION);
+
+        vm.prank(admin);
+        uint256 correctionIndex =
+            isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 200, 2, UNIT_TCO2E, T0, T1, METHOD_1, "ipfs://v1", 0);
+
+        assertEq(correctionIndex, 1, "admin correction index must be 1");
+        IImpactSnapshotLog.IndicatorSnapshot memory original = isl.getSnapshot(SUBJECT_A, 0);
+        IImpactSnapshotLog.IndicatorSnapshot memory correction = isl.getSnapshot(SUBJECT_A, 1);
+        assertEq(original.correctedByIndex, 1, "original must point to admin correction");
+        assertEq(correction.reportedBy, admin, "admin must be recorded as correction reporter");
+    }
+
     // -------------------------------------------------------------------------
     // 6. test_recordSnapshot_revertsForkCorrection
     // -------------------------------------------------------------------------
@@ -177,7 +241,7 @@ contract ImpactSnapshotLogTest is Test {
 
         vm.prank(reporter);
         vm.expectRevert("ImpactSnapshotLog: target snapshot already corrected");
-        isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 200, 2, UNIT_TCO2E, T0, T1, METHOD_1, "", 0);
+        isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 200, 2, UNIT_TCO2E, T0, T1, METHOD_1, "ipfs://v1", 0);
     }
 
     // -------------------------------------------------------------------------
@@ -186,9 +250,10 @@ contract ImpactSnapshotLogTest is Test {
     function test_recordSnapshot_correctionMustMatchPeriod() public {
         _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION); // index 0
 
+        vm.warp(T2);
         vm.prank(reporter);
         vm.expectRevert("ImpactSnapshotLog: correction must match target period and indicator");
-        isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 200, 2, UNIT_TCO2E, T1, T2, METHOD_1, "", 0);
+        isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 200, 2, UNIT_TCO2E, T1, T2, METHOD_1, "ipfs://v1", 0);
     }
 
     // -------------------------------------------------------------------------
@@ -316,7 +381,7 @@ contract ImpactSnapshotLogTest is Test {
         assertTrue(att.endorsed, "endorsed must be true");
         assertEq(att.evidenceHash, EVIDENCE, "evidenceHash mismatch");
         assertEq(att.evidenceURI, "ipfs://evidence", "evidenceURI mismatch");
-        assertEq(att.attestedAt, T0, "attestedAt mismatch");
+        assertEq(att.attestedAt, T1, "attestedAt mismatch");
     }
 
     // -------------------------------------------------------------------------
@@ -426,6 +491,22 @@ contract ImpactSnapshotLogTest is Test {
         isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_2, keccak256("method-v3"), "ipfs://v3", 1);
     }
 
+    function test_supersedeMethodology_revertsZeroNewMethodologyHash() public {
+        _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION);
+
+        vm.prank(reporter);
+        vm.expectRevert("ImpactSnapshotLog: zero methodology");
+        isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, bytes32(0), "ipfs://v2", 1);
+    }
+
+    function test_supersedeMethodology_revertsEmptyNewMethodologyURI() public {
+        _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION);
+
+        vm.prank(reporter);
+        vm.expectRevert("ImpactSnapshotLog: empty methodology URI");
+        isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "", 1);
+    }
+
     // -------------------------------------------------------------------------
     // 27. test_supersedeMethodology_revertsPastOrdinal
     // -------------------------------------------------------------------------
@@ -434,7 +515,7 @@ contract ImpactSnapshotLogTest is Test {
         _record(SUBJECT_A, CARBON_OFFSET, T1, T2, NO_CORRECTION); // ordinal count = 2
 
         vm.prank(reporter);
-        vm.expectRevert("ImpactSnapshotLog: effectiveFromOrdinal must equal current indicatorSnapshotCount");
+        vm.expectRevert("ImpactSnapshotLog: effectiveFromOrdinal before current indicatorSnapshotCount");
         isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "ipfs://v2", 1);
     }
 
@@ -498,13 +579,14 @@ contract ImpactSnapshotLogTest is Test {
         vm.prank(reporter);
         isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "ipfs://v2", 1);
 
+        vm.warp(T2);
         vm.prank(reporter);
         vm.expectRevert("ImpactSnapshotLog: methodologyHash must match active methodology");
         isl.recordSnapshot(SUBJECT_A, CARBON_OFFSET, 100, 2, UNIT_TCO2E, T1, T2, METHOD_1, "ipfs://v1", NO_CORRECTION);
     }
 
     // -------------------------------------------------------------------------
-    // 33. P1.3 — effectiveFromOrdinal must equal current indicatorSnapshotCount
+    // 33. P1.3 — effectiveFromOrdinal may equal current indicatorSnapshotCount
     // -------------------------------------------------------------------------
     function test_supersedeMethodology_requiresExactOrdinal() public {
         _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION); // count = 1
@@ -517,14 +599,36 @@ contract ImpactSnapshotLogTest is Test {
     }
 
     // -------------------------------------------------------------------------
-    // 33b. P1.3 — effectiveFromOrdinal ahead of current count is rejected
+    // 33b. P1.3 — effectiveFromOrdinal ahead of current count is scheduled
     // -------------------------------------------------------------------------
-    function test_supersedeMethodology_rejectsFutureOrdinal() public {
+    function test_supersedeMethodology_schedulesFutureOrdinal() public {
         _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION); // count = 1
 
         vm.prank(reporter);
-        vm.expectRevert("ImpactSnapshotLog: effectiveFromOrdinal must equal current indicatorSnapshotCount");
-        isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "ipfs://v2", 5);
+        isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "ipfs://v2", 3);
+
+        (bytes32 hash, string memory uri) = isl.activeMethodology(SUBJECT_A, CARBON_OFFSET);
+        assertEq(hash, METHOD_1, "future supersession must not activate immediately");
+        assertEq(uri, "ipfs://v1", "active URI must remain v1 before scheduled ordinal");
+
+        _record(SUBJECT_A, CARBON_OFFSET, T1, T2, NO_CORRECTION); // count = 2
+        (hash, uri) = isl.activeMethodology(SUBJECT_A, CARBON_OFFSET);
+        assertEq(hash, METHOD_1, "future supersession must remain pending before ordinal");
+        assertEq(uri, "ipfs://v1", "active URI must still be v1 before scheduled ordinal");
+
+        _record(SUBJECT_A, CARBON_OFFSET, T2, T2 + 1, NO_CORRECTION); // count = 3
+        (hash, uri) = isl.activeMethodology(SUBJECT_A, CARBON_OFFSET);
+        assertEq(hash, METHOD_2, "future supersession must become active when ordinal is reached");
+        assertEq(uri, "ipfs://v2", "active URI must become v2 when ordinal is reached");
+
+        vm.warp(T2 + 2);
+        vm.prank(reporter);
+        vm.expectRevert("ImpactSnapshotLog: methodologyHash must match active methodology");
+        isl.recordSnapshot(
+            SUBJECT_A, CARBON_OFFSET, 100, 2, UNIT_TCO2E, T2 + 1, T2 + 2, METHOD_1, "ipfs://v1", NO_CORRECTION
+        );
+
+        _recordAs(reporter, SUBJECT_A, CARBON_OFFSET, T2 + 1, T2 + 2, NO_CORRECTION, METHOD_2, "ipfs://v2");
     }
 
     // -------------------------------------------------------------------------

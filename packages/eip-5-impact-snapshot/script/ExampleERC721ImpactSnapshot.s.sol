@@ -82,8 +82,9 @@ contract ExampleERC721ImpactSnapshot is Script {
         console.log("Property B (London): Q1 ENERGY_SAVED index:", bNrgIdx);
 
         // 4. Methodology update for property A only (new CBECS 2024 standard)
-        //    effectiveFromOrdinal must == indicatorSnapshotCount at time of call
-        //    Property A has 1 ENERGY_SAVED snapshot so far (index 0), count = 1
+        //    effectiveFromOrdinal may be the current indicatorSnapshotCount
+        //    for immediate activation, or a higher ordinal for scheduled activation.
+        //    Property A has 1 ENERGY_SAVED snapshot so far (index 0), count = 1.
         log.supersedeMethodology(
             anchorA,
             ENERGY_SAVED,

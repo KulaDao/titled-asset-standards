@@ -10,6 +10,13 @@ contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodolo
     bytes32 public constant REPORTER_ROLE = keccak256("REPORTER");
     bytes32 public constant ATTESTOR_ROLE = keccak256("ATTESTOR");
 
+    struct PendingMethodology {
+        bytes32 newMethodologyHash;
+        string newMethodologyUri;
+        uint256 effectiveFromOrdinal;
+        bool pending;
+    }
+
     // snapshots[subjectId] — index within array is the per-subject snapshotIndex
     mapping(bytes32 => IndicatorSnapshot[]) private _snapshots;
 
@@ -30,6 +37,8 @@ contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodolo
     mapping(bytes32 => mapping(bytes32 => string)) private _activeMethodologyUri;
     // _methodologyInitialized[subjectId][indicatorId]
     mapping(bytes32 => mapping(bytes32 => bool)) private _methodologyInitialized;
+    // _pendingMethodology[subjectId][indicatorId]
+    mapping(bytes32 => mapping(bytes32 => PendingMethodology)) private _pendingMethodology;
 
     constructor(address admin) {
         require(admin != address(0), "ImpactSnapshotLog: zero admin");
@@ -55,6 +64,9 @@ contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodolo
         uint256 correctsIndex
     ) external onlyRole(REPORTER_ROLE) returns (uint256 snapshotIndex) {
         require(periodStart < periodEnd, "ImpactSnapshotLog: periodStart must be < periodEnd");
+        require(periodEnd <= block.timestamp, "ImpactSnapshotLog: incomplete period");
+        require(methodologyHash != bytes32(0), "ImpactSnapshotLog: zero methodology");
+        require(bytes(methodologyURI).length != 0, "ImpactSnapshotLog: empty methodology URI");
 
         snapshotIndex = _snapshots[subjectId].length;
         bytes32 periodKey = keccak256(abi.encodePacked(periodStart, periodEnd));
@@ -67,6 +79,10 @@ contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodolo
                 target.indicatorId == indicatorId && target.periodStart == periodStart && target.periodEnd == periodEnd,
                 "ImpactSnapshotLog: correction must match target period and indicator"
             );
+            require(
+                target.reportedBy == msg.sender || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
+                "ImpactSnapshotLog: correction not authorized"
+            );
             // correctedByIndex == 0 is also the zero-value; we disambiguate using the
             // snapshotIndex itself: index 0 can never correct another snapshot at index 0.
             target.correctedByIndex = snapshotIndex;
@@ -78,6 +94,7 @@ contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodolo
         }
 
         if (_methodologyInitialized[subjectId][indicatorId]) {
+            _applyPendingMethodologyIfReady(subjectId, indicatorId);
             require(
                 methodologyHash == _activeMethodologyHash[subjectId][indicatorId],
                 "ImpactSnapshotLog: methodologyHash must match active methodology"
@@ -233,17 +250,32 @@ contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodolo
         uint256 effectiveFromOrdinal
     ) external onlyRole(REPORTER_ROLE) {
         require(_methodologyInitialized[subjectId][indicatorId], "ImpactSnapshotLog: methodology not yet initialized");
+        require(newMethodologyHash != bytes32(0), "ImpactSnapshotLog: zero methodology");
+        require(bytes(newMethodologyURI).length != 0, "ImpactSnapshotLog: empty methodology URI");
+        _applyPendingMethodologyIfReady(subjectId, indicatorId);
+        require(
+            !_pendingMethodology[subjectId][indicatorId].pending, "ImpactSnapshotLog: methodology supersession pending"
+        );
         require(
             _activeMethodologyHash[subjectId][indicatorId] == oldMethodologyHash,
             "ImpactSnapshotLog: oldMethodologyHash does not match active methodology"
         );
+        uint256 currentOrdinal = _indicatorIndices[subjectId][indicatorId].length;
         require(
-            effectiveFromOrdinal == _indicatorIndices[subjectId][indicatorId].length,
-            "ImpactSnapshotLog: effectiveFromOrdinal must equal current indicatorSnapshotCount"
+            effectiveFromOrdinal >= currentOrdinal,
+            "ImpactSnapshotLog: effectiveFromOrdinal before current indicatorSnapshotCount"
         );
 
-        _activeMethodologyHash[subjectId][indicatorId] = newMethodologyHash;
-        _activeMethodologyUri[subjectId][indicatorId] = newMethodologyURI;
+        if (effectiveFromOrdinal == currentOrdinal) {
+            _setActiveMethodology(subjectId, indicatorId, newMethodologyHash, newMethodologyURI);
+        } else {
+            _pendingMethodology[subjectId][indicatorId] = PendingMethodology({
+                newMethodologyHash: newMethodologyHash,
+                newMethodologyUri: newMethodologyURI,
+                effectiveFromOrdinal: effectiveFromOrdinal,
+                pending: true
+            });
+        }
 
         emit MethodologySuperseded(subjectId, indicatorId, oldMethodologyHash, newMethodologyHash, effectiveFromOrdinal);
     }
@@ -253,6 +285,10 @@ contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodolo
         view
         returns (bytes32 methodologyHash, string memory methodologyURI)
     {
+        PendingMethodology storage pending = _pendingMethodology[subjectId][indicatorId];
+        if (pending.pending && _indicatorIndices[subjectId][indicatorId].length >= pending.effectiveFromOrdinal) {
+            return (pending.newMethodologyHash, pending.newMethodologyUri);
+        }
         return (_activeMethodologyHash[subjectId][indicatorId], _activeMethodologyUri[subjectId][indicatorId]);
     }
 
@@ -264,5 +300,24 @@ contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodolo
         return interfaceId == type(IImpactSnapshotLog).interfaceId
             || interfaceId == type(IImpactAttestation).interfaceId
             || interfaceId == type(IMethodologyVersioning).interfaceId || super.supportsInterface(interfaceId);
+    }
+
+    function _applyPendingMethodologyIfReady(bytes32 subjectId, bytes32 indicatorId) internal {
+        PendingMethodology storage pending = _pendingMethodology[subjectId][indicatorId];
+        if (!pending.pending) return;
+        if (_indicatorIndices[subjectId][indicatorId].length < pending.effectiveFromOrdinal) return;
+
+        _setActiveMethodology(subjectId, indicatorId, pending.newMethodologyHash, pending.newMethodologyUri);
+        delete _pendingMethodology[subjectId][indicatorId];
+    }
+
+    function _setActiveMethodology(
+        bytes32 subjectId,
+        bytes32 indicatorId,
+        bytes32 methodologyHash,
+        string memory methodologyURI
+    ) internal {
+        _activeMethodologyHash[subjectId][indicatorId] = methodologyHash;
+        _activeMethodologyUri[subjectId][indicatorId] = methodologyURI;
     }
 }

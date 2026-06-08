@@ -5,6 +5,18 @@ import {ImpactSnapshotLog} from "../src/reference/ImpactSnapshotLog.sol";
 import {IImpactSnapshotLog, NO_CORRECTION} from "../src/interfaces/IImpactSnapshotLog.sol";
 import {CARBON_OFFSET, ENERGY_GENERATED, UNIT_TCO2E} from "../src/libraries/ImpactConstants.sol";
 
+contract ImpactAttestorActor {
+    ImpactSnapshotLog internal immutable isl;
+
+    constructor(ImpactSnapshotLog isl_) {
+        isl = isl_;
+    }
+
+    function attest(bytes32 subjectId, uint256 snapshotIdx) external {
+        isl.attestSnapshot(subjectId, snapshotIdx, true, keccak256("evidence"), "ipfs://ev");
+    }
+}
+
 /// @dev Medusa fuzz harness for ImpactSnapshotLog.
 ///      Run: medusa fuzz (from packages/eip-5-impact-snapshot)
 ///
@@ -15,6 +27,7 @@ import {CARBON_OFFSET, ENERGY_GENERATED, UNIT_TCO2E} from "../src/libraries/Impa
 ///        property_activeMethodologyNonZeroOnceInitialized
 contract ImpactSnapshotLogFuzzTest {
     ImpactSnapshotLog internal isl;
+    ImpactAttestorActor internal attestorActor;
 
     bytes32 internal constant SUBJECT_A = keccak256("subject-a");
     bytes32 internal constant SUBJECT_B = keccak256("subject-b");
@@ -29,11 +42,10 @@ contract ImpactSnapshotLogFuzzTest {
     // minimum snapshot count ever seen (for monotonicity check)
     mapping(bytes32 => uint256) internal _minSnapshotCount;
 
-    uint64 internal _ts = 1_000_000;
-
     constructor() {
         // Deploy with address(this) as admin so the harness can call grantRole.
         isl = new ImpactSnapshotLog(address(this));
+        attestorActor = new ImpactAttestorActor(isl);
         bytes32 reporterRole = isl.REPORTER_ROLE();
         bytes32 attestorRole = isl.ATTESTOR_ROLE();
         bytes32 adminRole = isl.DEFAULT_ADMIN_ROLE();
@@ -44,17 +56,13 @@ contract ImpactSnapshotLogFuzzTest {
         isl.grantRole(attestorRole, address(0x10000));
         isl.grantRole(attestorRole, address(0x20000));
         isl.grantRole(attestorRole, address(0x30000));
+        isl.grantRole(attestorRole, address(attestorActor));
         isl.grantRole(adminRole, address(0x10000));
         isl.grantRole(adminRole, address(0x20000));
         isl.grantRole(adminRole, address(0x30000));
     }
 
     // ── State-mutating functions Medusa will call randomly ──────────────
-
-    function fuzz_advanceTime(uint32 delta) external {
-        if (delta == 0 || delta > 30 days) return;
-        _ts += delta;
-    }
 
     function fuzz_recordOriginal(uint8 subjectIdx, uint8 indicatorIdx, uint32 periodOffset, uint32 periodLength)
         external
@@ -65,8 +73,8 @@ contract ImpactSnapshotLogFuzzTest {
 
         bytes32 subjectId = subjects[subjectIdx];
         bytes32 indicatorId = indicators[indicatorIdx];
-        uint64 start = _ts + periodOffset;
-        uint64 end = start + periodLength;
+        (bool ok, uint64 start, uint64 end) = _completedPeriod(periodOffset, periodLength);
+        if (!ok) return;
         bytes32 periodKey = keccak256(abi.encodePacked(start, end));
         bytes32 slotKey = keccak256(abi.encode(subjectId, indicatorId, periodKey));
 
@@ -84,13 +92,7 @@ contract ImpactSnapshotLogFuzzTest {
         } catch {}
     }
 
-    function fuzz_recordCorrection(
-        uint8 subjectIdx,
-        uint256 targetIndex,
-        uint8 indicatorIdx,
-        uint32 periodOffset,
-        uint32 periodLength
-    ) external {
+    function fuzz_recordCorrection(uint8 subjectIdx, uint256 targetIndex, uint8 indicatorIdx) external {
         subjectIdx = subjectIdx % 2;
         indicatorIdx = indicatorIdx % 2;
         bytes32 subjectId = subjects[subjectIdx];
@@ -144,8 +146,7 @@ contract ImpactSnapshotLogFuzzTest {
         if (count == 0) return;
         snapshotIdx = snapshotIdx % count;
 
-        try isl.attestSnapshot{gas: 200_000}(subjectId, snapshotIdx, true, keccak256("evidence"), "ipfs://ev") {}
-            catch {}
+        try attestorActor.attest{gas: 200_000}(subjectId, snapshotIdx) {} catch {}
     }
 
     // ── property_ functions — return false to signal failure ───────────
@@ -212,5 +213,23 @@ contract ImpactSnapshotLogFuzzTest {
             }
         }
         return true;
+    }
+
+    function _completedPeriod(uint32 periodOffset, uint32 periodLength)
+        internal
+        view
+        returns (bool ok, uint64 start, uint64 end)
+    {
+        if (periodLength == 0) return (false, 0, 0);
+        uint256 nowTs = block.timestamp;
+        if (nowTs > type(uint64).max) return (false, 0, 0);
+        uint256 totalLookback = uint256(periodOffset) + uint256(periodLength);
+        if (nowTs <= totalLookback) return (false, 0, 0);
+
+        uint256 endTs = nowTs - uint256(periodOffset);
+        // forge-lint: disable-next-line(unsafe-typecast)
+        end = uint64(endTs);
+        start = uint64(uint256(end) - uint256(periodLength));
+        return (true, start, end);
     }
 }

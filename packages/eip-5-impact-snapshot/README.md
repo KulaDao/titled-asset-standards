@@ -26,7 +26,7 @@ On-chain append-only impact snapshot log that binds structured, auditable impact
 cd packages/eip-5-impact-snapshot
 
 forge build
-forge test                # 38 unit tests, 0 failures
+forge test                # unit tests
 
 # Invariant / fuzz
 medusa fuzz --timeout 120
@@ -35,8 +35,11 @@ medusa fuzz --timeout 120
 ## Design Decisions
 
 - Snapshot indices are global per subject; indicator-level ordinals are tracked separately via `_indicatorIndices`
+- `recordSnapshot()` only accepts completed periods where `periodEnd <= block.timestamp`
+- Methodology hashes and URIs are required for snapshots and methodology supersessions
 - A second original for the same `(subjectId, indicatorId, period)` is rejected — revisions must use `correctsIndex`
+- `recordSnapshot()` is `REPORTER_ROLE` gated; corrections by non-original reporters additionally require `DEFAULT_ADMIN_ROLE`
 - `currentSnapshotForPeriod()` walks the correction chain to the terminal snapshot
 - Methodology is initialized by the first snapshot for a `(subjectId, indicatorId)` pair; all subsequent snapshots must use the active methodology hash
-- `supersedeMethodology()` requires `effectiveFromOrdinal == indicatorSnapshotCount` — the new methodology takes effect from the next snapshot only
+- `supersedeMethodology()` accepts `effectiveFromOrdinal >= indicatorSnapshotCount`; future ordinals are stored as pending and activate when the indicator reaches that ordinal
 - Self-attestation is blocked: the address that recorded a snapshot cannot endorse it as attestor
