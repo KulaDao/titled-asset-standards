@@ -39,8 +39,8 @@
     },
     "eip-5-impact-snapshot": {
       "ImpactSnapshotLog": {
-        "address": "0x7e215fA9E513fcfCca96bEd4ebB0e19544617B3B",
-        "deployBlock": 11017214,
+        "address": "0x0e3266c4Ce3CAb97430677288B1E8Ae9D9ab41C6",
+        "deployBlock": 11017427,
         "verified": true
       }
     },
