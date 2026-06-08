@@ -6,7 +6,7 @@ import {DocumentBundleAnchor} from "../src/reference/DocumentBundleAnchor.sol";
 
 contract DeployDocumentBundleAnchor is Script {
     function run() external returns (DocumentBundleAnchor anchor) {
-        address admin       = vm.envAddress("ADMIN_ADDRESS");
+        address admin = vm.envAddress("ADMIN_ADDRESS");
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
 
         vm.startBroadcast(deployerKey);

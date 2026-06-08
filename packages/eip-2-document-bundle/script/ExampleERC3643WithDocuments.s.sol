@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
 import {DocumentBundleAnchor} from "../src/reference/DocumentBundleAnchor.sol";
-import {BundleAnchorVerifier}  from "../src/reference/BundleAnchorVerifier.sol";
+import {BundleAnchorVerifier} from "../src/reference/BundleAnchorVerifier.sol";
 import {BundleHashLib} from "../src/libraries/BundleHashLib.sol";
 
 /// @notice Minimal interface for the T-REX token's compliance functions.
@@ -38,16 +38,16 @@ interface IERC3643Compliance {
 ///        - ERC-3643 investor whitelisted and not frozen
 ///   4. Show what a compliant settlement check looks like
 contract ExampleERC3643WithDocuments is Script {
-    bytes32 constant ROLE_PROSPECTUS  = keccak256("PROSPECTUS");
-    bytes32 constant ROLE_LEGAL       = keccak256("LEGAL_BASIS");
-    bytes32 constant ROLE_AUDIT       = keccak256("AUDIT_REPORT");
+    bytes32 constant ROLE_PROSPECTUS = keccak256("PROSPECTUS");
+    bytes32 constant ROLE_LEGAL = keccak256("LEGAL_BASIS");
+    bytes32 constant ROLE_AUDIT = keccak256("AUDIT_REPORT");
 
     function run() external {
-        uint256 deployerKey   = vm.envUint("PRIVATE_KEY");
-        address deployer      = vm.addr(deployerKey);
+        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(deployerKey);
         bytes32 assetAnchorId = vm.envBytes32("ASSET_ANCHOR_ID");
-        address token         = vm.envAddress("TOKEN_ADDRESS");
-        address investor      = vm.envOr("INVESTOR_A", address(0xAA));
+        address token = vm.envAddress("TOKEN_ADDRESS");
+        address investor = vm.envOr("INVESTOR_A", address(0xAA));
 
         vm.startBroadcast(deployerKey);
 
@@ -68,12 +68,14 @@ contract ExampleERC3643WithDocuments is Script {
         auditDocs[2] = "bond-reserve-attestation-v1.pdf";
 
         bytes32 prospectus = _rawPdfBundle(ROLE_PROSPECTUS, prospectusDocs);
-        bytes32 legal      = _rawPdfBundle(ROLE_LEGAL, legalDocs);
-        bytes32 audit      = _rawPdfBundle(ROLE_AUDIT, auditDocs);
+        bytes32 legal = _rawPdfBundle(ROLE_LEGAL, legalDocs);
+        bytes32 audit = _rawPdfBundle(ROLE_AUDIT, auditDocs);
 
-        bundleAnchor.anchorBundle(prospectus, assetAnchorId, ROLE_PROSPECTUS, prospectusDocs.length, "ipfs://QmBondProspectus");
-        bundleAnchor.anchorBundle(legal,      assetAnchorId, ROLE_LEGAL,      legalDocs.length,      "ipfs://QmBondLegalOpinion");
-        bundleAnchor.anchorBundle(audit,      assetAnchorId, ROLE_AUDIT,      auditDocs.length,      "ipfs://QmBondAuditReport");
+        bundleAnchor.anchorBundle(
+            prospectus, assetAnchorId, ROLE_PROSPECTUS, prospectusDocs.length, "ipfs://QmBondProspectus"
+        );
+        bundleAnchor.anchorBundle(legal, assetAnchorId, ROLE_LEGAL, legalDocs.length, "ipfs://QmBondLegalOpinion");
+        bundleAnchor.anchorBundle(audit, assetAnchorId, ROLE_AUDIT, auditDocs.length, "ipfs://QmBondAuditReport");
         console.log("Three regulatory bundles anchored against bond asset.");
 
         // 3. Deploy BundleAnchorVerifier
@@ -100,13 +102,10 @@ contract ExampleERC3643WithDocuments is Script {
         vm.stopBroadcast();
     }
 
-    function _rawPdfBundle(bytes32 role, string[] memory canonicalFilenames)
-        internal pure returns (bytes32)
-    {
+    function _rawPdfBundle(bytes32 role, string[] memory canonicalFilenames) internal pure returns (bytes32) {
         require(canonicalFilenames.length > 0, "ExampleERC3643WithDocuments: empty bundle");
 
-        BundleHashLib.DocumentEntry[] memory entries =
-            new BundleHashLib.DocumentEntry[](canonicalFilenames.length);
+        BundleHashLib.DocumentEntry[] memory entries = new BundleHashLib.DocumentEntry[](canonicalFilenames.length);
 
         for (uint256 i = 0; i < canonicalFilenames.length; i++) {
             bytes memory nameBytes = bytes(canonicalFilenames[i]);
@@ -119,7 +118,7 @@ contract ExampleERC3643WithDocuments is Script {
             });
         }
 
-        return BundleHashLib.computeBundleHash(BundleHashLib.sortEntries(entries));
+        return BundleHashLib.computeCanonicalBundleHash(entries);
     }
 }
 
@@ -128,12 +127,12 @@ contract ExampleERC3643WithDocuments is Script {
 /// @dev    In production this would be called by a DEX or OTC settlement contract.
 contract SettlementGuard {
     bytes32 constant ROLE_PROSPECTUS = keccak256("PROSPECTUS");
-    bytes32 constant ROLE_LEGAL      = keccak256("LEGAL_BASIS");
-    bytes32 constant ROLE_AUDIT      = keccak256("AUDIT_REPORT");
+    bytes32 constant ROLE_LEGAL = keccak256("LEGAL_BASIS");
+    bytes32 constant ROLE_AUDIT = keccak256("AUDIT_REPORT");
 
-    IERC3643Compliance   private immutable _token;
+    IERC3643Compliance private immutable _token;
     BundleAnchorVerifier private immutable _verifier;
-    bytes32              private immutable _subjectId;
+    bytes32 private immutable _subjectId;
 
     struct ComplianceStatus {
         bool assetAnchorActive;
@@ -151,39 +150,34 @@ contract SettlementGuard {
         require(verifier_ != address(0), "SettlementGuard: zero verifier");
         require(subjectId_ != bytes32(0), "SettlementGuard: zero subject");
 
-        _token     = IERC3643Compliance(token_);
-        _verifier  = BundleAnchorVerifier(verifier_);
+        _token = IERC3643Compliance(token_);
+        _verifier = BundleAnchorVerifier(verifier_);
         _subjectId = subjectId_;
 
         require(_token.anchorId() == subjectId_, "SettlementGuard: token subject mismatch");
     }
 
     function checkCompliance(address investor) external view returns (ComplianceStatus memory s) {
-        s.assetAnchorActive  = _token.isAnchorActive();
-        s.prospectusPresent  = _verifier.hasActiveBundle(_subjectId, ROLE_PROSPECTUS);
-        s.legalPresent       = _verifier.hasActiveBundle(_subjectId, ROLE_LEGAL);
-        s.auditPresent       = _verifier.hasActiveBundle(_subjectId, ROLE_AUDIT);
+        s.assetAnchorActive = _token.isAnchorActive();
+        s.prospectusPresent = _verifier.hasActiveBundle(_subjectId, ROLE_PROSPECTUS);
+        s.legalPresent = _verifier.hasActiveBundle(_subjectId, ROLE_LEGAL);
+        s.auditPresent = _verifier.hasActiveBundle(_subjectId, ROLE_AUDIT);
         s.investorWhitelisted = _token.isWhitelisted(investor);
-        s.investorFrozen      = _token.isFrozen(investor);
-        s.tokenPaused         = _token.paused();
-        s.allPass = s.assetAnchorActive
-            && s.prospectusPresent
-            && s.legalPresent
-            && s.auditPresent
-            && s.investorWhitelisted
-            && !s.investorFrozen
-            && !s.tokenPaused;
+        s.investorFrozen = _token.isFrozen(investor);
+        s.tokenPaused = _token.paused();
+        s.allPass = s.assetAnchorActive && s.prospectusPresent && s.legalPresent && s.auditPresent
+            && s.investorWhitelisted && !s.investorFrozen && !s.tokenPaused;
     }
 
     /// @notice Reverts if any compliance check fails. Use in settlement logic.
     function requireCompliant(address investor) external view {
         ComplianceStatus memory s = this.checkCompliance(investor);
-        require(s.assetAnchorActive,   "SettlementGuard: asset anchor inactive");
-        require(s.prospectusPresent,   "SettlementGuard: prospectus not anchored");
-        require(s.legalPresent,        "SettlementGuard: legal opinion not anchored");
-        require(s.auditPresent,        "SettlementGuard: audit report not anchored");
+        require(s.assetAnchorActive, "SettlementGuard: asset anchor inactive");
+        require(s.prospectusPresent, "SettlementGuard: prospectus not anchored");
+        require(s.legalPresent, "SettlementGuard: legal opinion not anchored");
+        require(s.auditPresent, "SettlementGuard: audit report not anchored");
         require(s.investorWhitelisted, "SettlementGuard: investor not whitelisted");
-        require(!s.investorFrozen,     "SettlementGuard: investor frozen");
-        require(!s.tokenPaused,        "SettlementGuard: token paused");
+        require(!s.investorFrozen, "SettlementGuard: investor frozen");
+        require(!s.tokenPaused, "SettlementGuard: token paused");
     }
 }

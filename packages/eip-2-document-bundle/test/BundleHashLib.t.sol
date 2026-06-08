@@ -8,62 +8,85 @@ contract BundleHashLibHarness {
     function computeBundleHash(BundleHashLib.DocumentEntry[] memory entries) external pure returns (bytes32) {
         return BundleHashLib.computeBundleHash(entries);
     }
+
+    function computeCanonicalBundleHash(BundleHashLib.DocumentEntry[] memory entries) external pure returns (bytes32) {
+        return BundleHashLib.computeCanonicalBundleHash(entries);
+    }
 }
 
 contract BundleHashLibTest is Test {
     function _entry(bytes32 content, bytes32 role, bytes32 mime, bytes32 fname, bytes32 norm)
-        internal pure returns (BundleHashLib.DocumentEntry memory)
+        internal
+        pure
+        returns (BundleHashLib.DocumentEntry memory)
     {
         return BundleHashLib.DocumentEntry({
-            contentHash: content,
-            role: role,
-            mimeTypeHash: mime,
-            filenameHash: fname,
-            normProfileId: norm
+            contentHash: content, role: role, mimeTypeHash: mime, filenameHash: fname, normProfileId: norm
         });
     }
 
     function test_computeBundleHash_deterministic() public {
         BundleHashLib.DocumentEntry[] memory entries1 = new BundleHashLib.DocumentEntry[](2);
-        entries1[0] = _entry(keccak256("c1"), BundleHashLib.LEGAL_BASIS, keccak256("pdf"), keccak256("a.pdf"), BundleHashLib.PROFILE_RAW);
-        entries1[1] = _entry(keccak256("c2"), BundleHashLib.EVIDENCE,    keccak256("json"), keccak256("b.json"), BundleHashLib.PROFILE_JSON_RFC8785);
+        entries1[0] = _entry(
+            keccak256("c1"), BundleHashLib.LEGAL_BASIS, keccak256("pdf"), keccak256("a.pdf"), BundleHashLib.PROFILE_RAW
+        );
+        entries1[1] = _entry(
+            keccak256("c2"),
+            BundleHashLib.EVIDENCE,
+            keccak256("json"),
+            keccak256("b.json"),
+            BundleHashLib.PROFILE_JSON_RFC8785
+        );
 
         BundleHashLib.DocumentEntry[] memory entries2 = new BundleHashLib.DocumentEntry[](2);
-        entries2[0] = _entry(keccak256("c2"), BundleHashLib.EVIDENCE,    keccak256("json"), keccak256("b.json"), BundleHashLib.PROFILE_JSON_RFC8785);
-        entries2[1] = _entry(keccak256("c1"), BundleHashLib.LEGAL_BASIS, keccak256("pdf"),  keccak256("a.pdf"),  BundleHashLib.PROFILE_RAW);
-
-        entries1 = BundleHashLib.sortEntries(entries1);
-        entries2 = BundleHashLib.sortEntries(entries2);
+        entries2[0] = _entry(
+            keccak256("c2"),
+            BundleHashLib.EVIDENCE,
+            keccak256("json"),
+            keccak256("b.json"),
+            BundleHashLib.PROFILE_JSON_RFC8785
+        );
+        entries2[1] = _entry(
+            keccak256("c1"), BundleHashLib.LEGAL_BASIS, keccak256("pdf"), keccak256("a.pdf"), BundleHashLib.PROFILE_RAW
+        );
 
         assertEq(
-            BundleHashLib.computeBundleHash(entries1),
-            BundleHashLib.computeBundleHash(entries2),
-            "same entries in different insertion order must hash identically after sort"
+            BundleHashLib.computeCanonicalBundleHash(entries1),
+            BundleHashLib.computeCanonicalBundleHash(entries2),
+            "same entries in different insertion order must hash identically through canonical path"
         );
     }
 
     function test_computeBundleHash_schemaVersionChangesHash() public {
         BundleHashLib.DocumentEntry[] memory entries = new BundleHashLib.DocumentEntry[](1);
-        entries[0] = _entry(keccak256("c1"), BundleHashLib.LEGAL_BASIS, keccak256("pdf"), keccak256("a.pdf"), BundleHashLib.PROFILE_RAW);
+        entries[0] = _entry(
+            keccak256("c1"), BundleHashLib.LEGAL_BASIS, keccak256("pdf"), keccak256("a.pdf"), BundleHashLib.PROFILE_RAW
+        );
 
-        bytes32 leaf = keccak256(abi.encodePacked(
-            entries[0].contentHash,
-            entries[0].role,
-            entries[0].mimeTypeHash,
-            entries[0].filenameHash,
-            entries[0].normProfileId
-        ));
+        bytes32 leaf = keccak256(
+            abi.encodePacked(
+                entries[0].contentHash,
+                entries[0].role,
+                entries[0].mimeTypeHash,
+                entries[0].filenameHash,
+                entries[0].normProfileId
+            )
+        );
 
-        bytes32 hashWithV1   = keccak256(abi.encodePacked(BundleHashLib.SCHEMA_V1, leaf));
-        bytes32 hashWithV2   = keccak256(abi.encodePacked(keccak256("EIP-XXXX:BUNDLE:V2"), leaf));
+        bytes32 hashWithV1 = keccak256(abi.encodePacked(BundleHashLib.SCHEMA_V1, leaf));
+        bytes32 hashWithV2 = keccak256(abi.encodePacked(keccak256("EIP-XXXX:BUNDLE:V2"), leaf));
 
         assertEq(BundleHashLib.computeBundleHash(entries), hashWithV1, "library must use SCHEMA_V1");
         assertTrue(hashWithV1 != hashWithV2, "different schema versions must produce different hashes");
     }
 
-    function test_computeBundleHash_orderMatters() public {
-        BundleHashLib.DocumentEntry memory a = _entry(keccak256("c1"), bytes32(uint256(1)), keccak256("pdf"),  keccak256("a.pdf"),  BundleHashLib.PROFILE_RAW);
-        BundleHashLib.DocumentEntry memory b = _entry(keccak256("c2"), bytes32(uint256(2)), keccak256("json"), keccak256("b.json"), BundleHashLib.PROFILE_RAW);
+    function test_computeBundleHash_revertsOnUnsortedInput() public {
+        BundleHashLib.DocumentEntry memory a = _entry(
+            keccak256("c1"), bytes32(uint256(1)), keccak256("pdf"), keccak256("a.pdf"), BundleHashLib.PROFILE_RAW
+        );
+        BundleHashLib.DocumentEntry memory b = _entry(
+            keccak256("c2"), bytes32(uint256(2)), keccak256("json"), keccak256("b.json"), BundleHashLib.PROFILE_RAW
+        );
 
         BundleHashLib.DocumentEntry[] memory correct = new BundleHashLib.DocumentEntry[](2);
         correct[0] = a; // role 1 < role 2 — ascending order
@@ -73,15 +96,24 @@ contract BundleHashLibTest is Test {
         reversed[0] = b;
         reversed[1] = a;
 
-        assertTrue(
-            BundleHashLib.computeBundleHash(correct) != BundleHashLib.computeBundleHash(reversed),
-            "unsorted and sorted entries must produce different hashes - sort is required"
-        );
+        BundleHashLibHarness harness = new BundleHashLibHarness();
+        bytes32 canonical = harness.computeBundleHash(correct);
+
+        vm.expectRevert("BundleHashLib: entries not sorted");
+        harness.computeBundleHash(reversed);
+
+        assertEq(harness.computeCanonicalBundleHash(reversed), canonical, "canonical path must sort unsorted entries");
     }
 
     function test_computeBundleHash_singleEntry() public {
         BundleHashLib.DocumentEntry[] memory entries = new BundleHashLib.DocumentEntry[](1);
-        entries[0] = _entry(keccak256("sole-doc"), BundleHashLib.LEGAL_BASIS, keccak256("application/pdf"), keccak256("contract.pdf"), BundleHashLib.PROFILE_RAW);
+        entries[0] = _entry(
+            keccak256("sole-doc"),
+            BundleHashLib.LEGAL_BASIS,
+            keccak256("application/pdf"),
+            keccak256("contract.pdf"),
+            BundleHashLib.PROFILE_RAW
+        );
 
         bytes32 h = BundleHashLib.computeBundleHash(entries);
         assertTrue(h != bytes32(0), "single-entry bundle hash must be non-zero");
@@ -96,13 +128,9 @@ contract BundleHashLibTest is Test {
             BundleHashLib.PROFILE_RAW
         );
 
-        bytes32 expectedLeaf = keccak256(abi.encodePacked(
-            entry.contentHash,
-            entry.role,
-            entry.mimeTypeHash,
-            entry.filenameHash,
-            entry.normProfileId
-        ));
+        bytes32 expectedLeaf = keccak256(
+            abi.encodePacked(entry.contentHash, entry.role, entry.mimeTypeHash, entry.filenameHash, entry.normProfileId)
+        );
         bytes32 expectedBundle = keccak256(abi.encodePacked(BundleHashLib.SCHEMA_V1, expectedLeaf));
 
         BundleHashLib.DocumentEntry[] memory entries = new BundleHashLib.DocumentEntry[](1);
@@ -116,35 +144,45 @@ contract BundleHashLibTest is Test {
     }
 
     function test_roleConstants() public {
-        assertEq(BundleHashLib.LEGAL_BASIS,   keccak256("LEGAL_BASIS"),   "LEGAL_BASIS constant mismatch");
-        assertEq(BundleHashLib.EVIDENCE,      keccak256("EVIDENCE"),      "EVIDENCE constant mismatch");
+        assertEq(BundleHashLib.LEGAL_BASIS, keccak256("LEGAL_BASIS"), "LEGAL_BASIS constant mismatch");
+        assertEq(BundleHashLib.EVIDENCE, keccak256("EVIDENCE"), "EVIDENCE constant mismatch");
         assertEq(BundleHashLib.CERTIFICATION, keccak256("CERTIFICATION"), "CERTIFICATION constant mismatch");
-        assertEq(BundleHashLib.AGREEMENT,     keccak256("AGREEMENT"),     "AGREEMENT constant mismatch");
-        assertEq(BundleHashLib.AMENDMENT,     keccak256("AMENDMENT"),     "AMENDMENT constant mismatch");
-        assertEq(BundleHashLib.SUPPORTING,    keccak256("SUPPORTING"),    "SUPPORTING constant mismatch");
+        assertEq(BundleHashLib.AGREEMENT, keccak256("AGREEMENT"), "AGREEMENT constant mismatch");
+        assertEq(BundleHashLib.AMENDMENT, keccak256("AMENDMENT"), "AMENDMENT constant mismatch");
+        assertEq(BundleHashLib.SUPPORTING, keccak256("SUPPORTING"), "SUPPORTING constant mismatch");
     }
 
     function test_profileConstants() public {
-        assertEq(BundleHashLib.SCHEMA_V1,            keccak256("EIP-XXXX:BUNDLE:V1"),      "SCHEMA_V1 constant mismatch");
-        assertEq(BundleHashLib.PROFILE_RAW,          keccak256("NORM:RAW:V1"),             "PROFILE_RAW constant mismatch");
-        assertEq(BundleHashLib.PROFILE_JSON_RFC8785, keccak256("NORM:JSON:RFC8785:V1"),    "PROFILE_JSON_RFC8785 constant mismatch");
-        assertEq(BundleHashLib.PROFILE_XML_C14N11,   keccak256("NORM:XML:C14N11:V1"),      "PROFILE_XML_C14N11 constant mismatch");
+        assertEq(BundleHashLib.SCHEMA_V1, keccak256("EIP-XXXX:BUNDLE:V1"), "SCHEMA_V1 constant mismatch");
+        assertEq(BundleHashLib.PROFILE_RAW, keccak256("NORM:RAW:V1"), "PROFILE_RAW constant mismatch");
+        assertEq(
+            BundleHashLib.PROFILE_JSON_RFC8785,
+            keccak256("NORM:JSON:RFC8785:V1"),
+            "PROFILE_JSON_RFC8785 constant mismatch"
+        );
+        assertEq(
+            BundleHashLib.PROFILE_XML_C14N11, keccak256("NORM:XML:C14N11:V1"), "PROFILE_XML_C14N11 constant mismatch"
+        );
     }
 
     function test_sortEntries_totalOrderOnAllFiveFields() public {
-        bytes32 sharedRole     = BundleHashLib.LEGAL_BASIS;
+        bytes32 sharedRole = BundleHashLib.LEGAL_BASIS;
         bytes32 sharedFilename = keccak256("same.pdf");
-        bytes32 sharedContent  = keccak256("same-content");
+        bytes32 sharedContent = keccak256("same-content");
 
         // Entries that are equal on (role, filenameHash, contentHash) but differ on mimeTypeHash
-        BundleHashLib.DocumentEntry memory e1 = _entry(sharedContent, sharedRole, keccak256("text/plain"), sharedFilename, BundleHashLib.PROFILE_RAW);
-        BundleHashLib.DocumentEntry memory e2 = _entry(sharedContent, sharedRole, keccak256("application/pdf"), sharedFilename, BundleHashLib.PROFILE_RAW);
+        BundleHashLib.DocumentEntry memory e1 =
+            _entry(sharedContent, sharedRole, keccak256("text/plain"), sharedFilename, BundleHashLib.PROFILE_RAW);
+        BundleHashLib.DocumentEntry memory e2 =
+            _entry(sharedContent, sharedRole, keccak256("application/pdf"), sharedFilename, BundleHashLib.PROFILE_RAW);
 
         BundleHashLib.DocumentEntry[] memory fwd = new BundleHashLib.DocumentEntry[](2);
-        fwd[0] = e1; fwd[1] = e2;
+        fwd[0] = e1;
+        fwd[1] = e2;
 
         BundleHashLib.DocumentEntry[] memory rev = new BundleHashLib.DocumentEntry[](2);
-        rev[0] = e2; rev[1] = e1;
+        rev[0] = e2;
+        rev[1] = e1;
 
         fwd = BundleHashLib.sortEntries(fwd);
         rev = BundleHashLib.sortEntries(rev);
@@ -156,14 +194,18 @@ contract BundleHashLibTest is Test {
         );
 
         // Entries equal on (role, filenameHash, contentHash, mimeTypeHash) but differ on normProfileId
-        BundleHashLib.DocumentEntry memory e3 = _entry(sharedContent, sharedRole, keccak256("pdf"), sharedFilename, BundleHashLib.PROFILE_RAW);
-        BundleHashLib.DocumentEntry memory e4 = _entry(sharedContent, sharedRole, keccak256("pdf"), sharedFilename, BundleHashLib.PROFILE_JSON_RFC8785);
+        BundleHashLib.DocumentEntry memory e3 =
+            _entry(sharedContent, sharedRole, keccak256("pdf"), sharedFilename, BundleHashLib.PROFILE_RAW);
+        BundleHashLib.DocumentEntry memory e4 =
+            _entry(sharedContent, sharedRole, keccak256("pdf"), sharedFilename, BundleHashLib.PROFILE_JSON_RFC8785);
 
         BundleHashLib.DocumentEntry[] memory fwd2 = new BundleHashLib.DocumentEntry[](2);
-        fwd2[0] = e3; fwd2[1] = e4;
+        fwd2[0] = e3;
+        fwd2[1] = e4;
 
         BundleHashLib.DocumentEntry[] memory rev2 = new BundleHashLib.DocumentEntry[](2);
-        rev2[0] = e4; rev2[1] = e3;
+        rev2[0] = e4;
+        rev2[1] = e3;
 
         fwd2 = BundleHashLib.sortEntries(fwd2);
         rev2 = BundleHashLib.sortEntries(rev2);

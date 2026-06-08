@@ -15,7 +15,7 @@ This checklist tracks the remaining implementation and documentation cleanup aft
 
 1. EIP-1 binding model fixes (complete)
 2. Cross-suite zero-value policy (complete)
-3. EIP-2 canonical hash hardening
+3. EIP-2 canonical hash hardening (complete)
 4. EIP-3 evidence semantics
 5. EIP-4 payload/evidence semantics
 6. EIP-5 attestation/methodology polish
@@ -196,31 +196,41 @@ Primary status: mostly resolved, but canonicalization can still be misused.
 
 ### Canonical Hash Path
 
-- [ ] Decide whether `computeBundleHash()` should sort internally or reject unsorted entries.
-- [ ] If keeping a pre-sorted API, add `computeCanonicalBundleHash()` or `requireSorted`.
-- [ ] Add tests proving unsorted input cannot accidentally be treated as canonical.
+- [x] Decide whether `computeBundleHash()` should sort internally or reject unsorted entries.
+- [x] If keeping a pre-sorted API, add `computeCanonicalBundleHash()` or `requireSorted`.
+- [x] Add tests proving unsorted input cannot accidentally be treated as canonical.
 
 Acceptance criteria:
 
 - There is one obvious safe path for computing canonical bundle hashes.
 
+Implementation notes:
+
+- `computeCanonicalBundleHash()` is the recommended safe path and sorts before hashing.
+- `computeBundleHash()` remains available for pre-sorted entries but rejects unsorted input.
+
 ### Subject / URI Validation
 
-- [?] Decide whether `bytes32(0)` subject is allowed.
-- [ ] If allowed, document it clearly as standalone mode and explain collision risk.
-- [ ] If not allowed, reject zero subject in `anchorBundle` and `supersedeBundle`.
-- [?] Decide whether empty `metadataURI` is allowed.
-- [ ] Add tests for the chosen behavior.
+- [x] Decide whether `bytes32(0)` subject is allowed.
+- [x] If allowed, document it clearly as standalone mode and explain collision risk.
+- [x] Not applicable: zero subject remains allowed, so no rejection was added to `anchorBundle` or `supersedeBundle`.
+- [x] Decide whether empty `metadataURI` is allowed.
+- [x] Add tests for the chosen behavior.
 
 Acceptance criteria:
 
 - Standalone anchoring behavior is explicit.
 - Empty metadata URI behavior is explicit.
 
+Implementation notes:
+
+- `bytes32(0)` subject is allowed as standalone mode.
+- Empty `metadataURI` is allowed and means no on-chain retrieval pointer is supplied.
+
 ### Schema Constant
 
-- [ ] Keep `EIP-XXXX:BUNDLE:V1` only if the README clearly marks it as pre-assignment.
-- [ ] Add a single pre-deployment checklist item to update all constants after EIP number assignment.
+- [x] Keep `EIP-XXXX:BUNDLE:V1` only if the README clearly marks it as pre-assignment.
+- [x] Add a single pre-deployment checklist item to update all constants after EIP number assignment.
 
 Acceptance criteria:
 
