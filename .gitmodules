@@ -4,6 +4,9 @@
 [submodule "packages/eip-1-asset-registry/lib/openzeppelin-contracts"]
 	path = packages/eip-1-asset-registry/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "packages/eip-3-transfer-domain/lib/openzeppelin-contracts"]
+	path = packages/eip-3-transfer-domain/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
 [submodule "packages/eip-5-impact-snapshot/lib/openzeppelin-contracts"]
 	path = packages/eip-5-impact-snapshot/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
