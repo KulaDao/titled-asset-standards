@@ -11,19 +11,23 @@ contract AnchorMetadataLibHarness {
 }
 
 contract AnchorMetadataLibTest is Test {
+    bytes32 constant ASSET_CLASS_EQUITY = keccak256("EIP-XXXX:ASSET_CLASS:EQUITY");
+    bytes32 constant JURISDICTION_US = keccak256("EIP-XXXX:JURISDICTION:US");
+
     AnchorMetadataLibHarness internal harness;
 
     function setUp() public {
         harness = new AnchorMetadataLibHarness();
     }
+
     function _validMeta() internal pure returns (AnchorMetadataLib.AnchorMetadata memory) {
         return AnchorMetadataLib.AnchorMetadata({
-            assetClass:      bytes32("EQUITY"),
-            jurisdiction:    bytes32("US"),
+            assetClass: ASSET_CLASS_EQUITY,
+            jurisdiction: JURISDICTION_US,
             attestationDate: uint64(1_000_000),
-            expiresAt:       uint64(2_000_000),
-            uri:             bytes("ipfs://QmFoo"),
-            extensions:      bytes("")
+            expiresAt: uint64(2_000_000),
+            uri: bytes("ipfs://QmFoo"),
+            extensions: bytes("")
         });
     }
 
@@ -32,12 +36,12 @@ contract AnchorMetadataLibTest is Test {
         bytes memory encoded = AnchorMetadataLib.encode(original);
         AnchorMetadataLib.AnchorMetadata memory decoded = AnchorMetadataLib.decode(encoded);
 
-        assertEq(decoded.assetClass,      original.assetClass,      "assetClass mismatch");
-        assertEq(decoded.jurisdiction,    original.jurisdiction,    "jurisdiction mismatch");
+        assertEq(decoded.assetClass, original.assetClass, "assetClass mismatch");
+        assertEq(decoded.jurisdiction, original.jurisdiction, "jurisdiction mismatch");
         assertEq(decoded.attestationDate, original.attestationDate, "attestationDate mismatch");
-        assertEq(decoded.expiresAt,       original.expiresAt,       "expiresAt mismatch");
-        assertEq(decoded.uri,             original.uri,             "uri mismatch");
-        assertEq(decoded.extensions,      original.extensions,      "extensions mismatch");
+        assertEq(decoded.expiresAt, original.expiresAt, "expiresAt mismatch");
+        assertEq(decoded.uri, original.uri, "uri mismatch");
+        assertEq(decoded.extensions, original.extensions, "extensions mismatch");
     }
 
     function test_validate_passesWithAllFields() public view {
