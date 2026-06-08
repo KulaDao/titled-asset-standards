@@ -1,0 +1,61 @@
+{
+  "chainId": 11155111,
+  "network": "sepolia",
+  "explorerBase": "https://sepolia.etherscan.io/address/",
+  "admin": "0x19e242b98341b491c25e73E4619C062fF94D5BB7",
+  "contracts": {
+    "eip-1-asset-registry": {
+      "AssetAnchorRegistry": {
+        "address": "0x2b0578497ced999000518e3786d4a5ac16fdf00e",
+        "deployBlock": 10940573,
+        "verified": true
+      }
+    },
+    "eip-2-document-bundle": {
+      "DocumentBundleAnchor": {
+        "address": "0xae867f34603D64fFdF65c7341CACcca6331A9f93",
+        "deployBlock": 11017179,
+        "verified": true
+      }
+    },
+    "eip-3-transfer-domain": {
+      "TransferDomainRegistry": {
+        "address": "0x55c4eD8ed404CC42165f6d47962184f47Cb89B91",
+        "deployBlock": 11017207,
+        "verified": true
+      },
+      "GracefulTransferDomainRegistry": {
+        "address": "0x53F9c30FF7Eb7089B22f6E44937a075cA80b92E9",
+        "deployBlock": 11017207,
+        "verified": true
+      }
+    },
+    "eip-4-compliance-event": {
+      "ComplianceEventLog": {
+        "address": "0x8276024a0e738FA25D40Fb6e232b36446a68b1C6",
+        "deployBlock": 11017210,
+        "verified": true
+      }
+    },
+    "eip-5-impact-snapshot": {
+      "ImpactSnapshotLog": {
+        "address": "0x7e215fA9E513fcfCca96bEd4ebB0e19544617B3B",
+        "deployBlock": 11017214,
+        "verified": true
+      }
+    },
+    "eip-6-nav-oracle": {
+      "NAVSnapshotOracle": {
+        "address": "0x7F0640Fc6a7d7bDDA4E865C4076Bb20841Eb256e",
+        "deployBlock": 11017219,
+        "verified": true
+      }
+    }
+  },
+  "demoAttestor": {
+    "address": "0x4D28411a6D9892b34fa5F37f1fF19FcEc9845030",
+    "role": "ATTESTOR_ROLE",
+    "grantedOn": "eip-5-impact-snapshot.ImpactSnapshotLog",
+    "purpose": "Demonstrates the self-attestation-blocked flow (a different account must submit attestations than the methodology admin)"
+  }
+}

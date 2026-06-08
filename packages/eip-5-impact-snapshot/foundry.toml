@@ -11,3 +11,9 @@ remappings = [
 
 [lint]
 exclude_lints = ["asm-keccak256"]
+
+[rpc_endpoints]
+sepolia = "${SEPOLIA_RPC_URL}"
+
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 11155111 }
