@@ -442,6 +442,14 @@ contract ImpactSnapshotLogTest is Test {
         isl.attestSnapshot(SUBJECT_A, 0, true, EVIDENCE, "");
     }
 
+    function test_attestSnapshot_revertsZeroEvidenceHash() public {
+        _record(SUBJECT_A, CARBON_OFFSET, T0, T1, NO_CORRECTION);
+
+        vm.prank(attestor);
+        vm.expectRevert("ImpactSnapshotLog: zero evidenceHash");
+        isl.attestSnapshot(SUBJECT_A, 0, true, bytes32(0), "");
+    }
+
     // -------------------------------------------------------------------------
     // 23. test_getAttestation_revertsInvalidIndex
     // -------------------------------------------------------------------------

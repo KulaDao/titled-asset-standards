@@ -113,6 +113,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         require(params.nav != type(int256).min, "NAVSnapshotOracle: unsupported nav");
         require(_abs(params.nav) <= _maxSafeAbsNAV(params.decimals), "NAVSnapshotOracle: nav too large");
         require(params.valuationTimestamp <= block.timestamp, "NAVSnapshotOracle: future valuation");
+        require(params.methodologyHash != bytes32(0), "NAVSnapshotOracle: zero methodologyHash");
         require(block.timestamp <= type(uint64).max, "NAVSnapshotOracle: timestamp overflow");
 
         bytes32 streamKey = _streamKey(params.subjectId, params.currency);

@@ -64,6 +64,14 @@ forge build
 forge test -vvv
 ```
 
+## Zero-Value Policy
+
+Evidence hash fields are required commitments. The reference implementation
+rejects `bytes32(0)` for route permission evidence, immediate revocation
+evidence, graceful revocation evidence, and graceful revocation cancellation
+evidence. Empty or unavailable evidence must be represented off-chain in the
+evidence document itself, not by using a zero hash on-chain.
+
 ## Analysis
 
 ```sh

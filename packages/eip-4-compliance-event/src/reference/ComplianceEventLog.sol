@@ -63,6 +63,7 @@ contract ComplianceEventLog is IComplianceEventLog {
         uint256 correctsIndex
     ) external onlyRole(RECORDER_ROLE) returns (uint256 eventIndex) {
         _validateTemporal(occurredAt);
+        require(evidenceHash != bytes32(0), "ComplianceEventLog: zero evidenceHash");
         require(parties.length <= MAX_PARTIES, "ComplianceEventLog: too many parties");
         require(payload.length <= MAX_PAYLOAD_BYTES, "ComplianceEventLog: payload too large");
 

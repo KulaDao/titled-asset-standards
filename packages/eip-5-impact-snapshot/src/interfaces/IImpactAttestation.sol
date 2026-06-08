@@ -19,6 +19,8 @@ interface IImpactAttestation {
         uint256 attestationIndex
     );
 
+    /// @dev MUST reject evidenceHash == bytes32(0). An empty evidenceURI is allowed,
+    ///      but the hash commitment itself is required.
     function attestSnapshot(
         bytes32 subjectId,
         uint256 snapshotIndex,

@@ -37,9 +37,18 @@ medusa fuzz --timeout 120
 - Snapshot indices are global per subject; indicator-level ordinals are tracked separately via `_indicatorIndices`
 - `recordSnapshot()` only accepts completed periods where `periodEnd <= block.timestamp`
 - Methodology hashes and URIs are required for snapshots and methodology supersessions
+- Attestation evidence hashes are required; `attestSnapshot()` rejects `bytes32(0)` evidence hashes
 - A second original for the same `(subjectId, indicatorId, period)` is rejected — revisions must use `correctsIndex`
 - `recordSnapshot()` is `REPORTER_ROLE` gated; corrections by non-original reporters additionally require `DEFAULT_ADMIN_ROLE`
 - `currentSnapshotForPeriod()` walks the correction chain to the terminal snapshot
 - Methodology is initialized by the first snapshot for a `(subjectId, indicatorId)` pair; all subsequent snapshots must use the active methodology hash
 - `supersedeMethodology()` accepts `effectiveFromOrdinal >= indicatorSnapshotCount`; future ordinals are stored as pending and activate when the indicator reaches that ordinal
 - Self-attestation is blocked: the address that recorded a snapshot cannot endorse it as attestor
+
+## Zero-Value Policy
+
+Methodology hashes and attestation evidence hashes are required commitments.
+The reference implementation rejects `bytes32(0)` for snapshot methodology
+hashes, methodology supersession hashes, and attestation evidence hashes.
+Attestation `evidenceURI` may be empty when evidence is private or exchanged
+out of band, but the nonzero hash must still commit to the evidence.
