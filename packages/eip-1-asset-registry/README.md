@@ -38,7 +38,7 @@ function isBound(bytes32 anchorId) external view returns (bool);
 ### `IAssetAnchorRegistryLifecycle`
 
 ```solidity
-function getMetadata(bytes32 anchorId) external view returns (AnchorMetadata memory);
+function getMetadata(bytes32 anchorId) external view returns (AnchorMetadataLib.AnchorMetadata memory);
 function registeredBy(bytes32 anchorId) external view returns (address);
 function isActive(bytes32 anchorId) external view returns (bool);
 function deactivateAnchor(bytes32 anchorId, string calldata reason) external;
