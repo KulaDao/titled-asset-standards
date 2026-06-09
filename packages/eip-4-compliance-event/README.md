@@ -28,6 +28,14 @@ evidence links, payload profiles, type indexing, and correction provenance.
 `ComplianceConstants.sol` defines subject types, event types, party roles,
 outcomes, common authorities, and base payload profile identifiers.
 
+## Zero-Value Policy
+
+`evidenceHash` is a required commitment for every compliance event, including
+corrections. The reference implementation rejects `bytes32(0)`. `evidenceURI`
+may be empty when the evidence location is not public or is exchanged out of
+band, but a nonzero hash must still identify the evidence bundle or redacted
+commitment.
+
 ## Access Control
 
 The reference implementation is dependency-free and includes minimal role control:

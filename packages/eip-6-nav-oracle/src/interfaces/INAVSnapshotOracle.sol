@@ -36,6 +36,8 @@ interface INAVSnapshotOracle {
         bytes32 indexed subjectId, bytes32 indexed currency, uint64 heartbeat, uint64 maxValuationAge
     );
 
+    /// @dev MUST reject methodologyHash == bytes32(0). methodologyURI MAY be empty
+    ///      only if the implementation documents how verifiers retrieve the methodology.
     function publishNAV(
         bytes32 subjectId,
         bytes32 currency,

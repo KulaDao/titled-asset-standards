@@ -35,6 +35,7 @@ interface IGracefulRouteRevocation {
 
     /// @notice Initiate a graceful revocation.
     /// @dev MUST emit RouteRevocationInitiated. The route remains permitted until effectiveAt.
+    ///      MUST reject revocationEvidenceHash == bytes32(0).
     function initiateRevocation(
         bytes32 sourceDomain,
         bytes32 destinationDomain,
@@ -45,6 +46,7 @@ interface IGracefulRouteRevocation {
     /// @notice Cancel a pending revocation.
     /// @dev MUST revert if no revocation is pending or if the grace period has expired.
     ///      MUST emit RouteRevocationCancelled.
+    ///      MUST reject cancellationEvidenceHash == bytes32(0).
     function cancelRevocation(
         bytes32 sourceDomain,
         bytes32 destinationDomain,

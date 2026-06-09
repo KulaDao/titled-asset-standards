@@ -107,6 +107,14 @@ contract GracefulTransferDomainRegistryTest is Test {
         registry.initiateRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, REVOCATION_EVIDENCE);
     }
 
+    function test_initiateRevocation_revertsZeroRevocationEvidenceHash() public {
+        _setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
+
+        vm.prank(registrar);
+        vm.expectRevert("GracefulTransferDomainRegistry: zero revocationEvidenceHash");
+        registry.initiateRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, bytes32(0));
+    }
+
     function test_initiateRevocation_revertsUnauthorized() public {
         _setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
 
@@ -253,6 +261,15 @@ contract GracefulTransferDomainRegistryTest is Test {
         vm.prank(registrar);
         vm.expectRevert("GracefulTransferDomainRegistry: no pending revocation");
         registry.cancelRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, CANCELLATION_EVIDENCE);
+    }
+
+    function test_cancelRevocation_revertsZeroCancellationEvidenceHash() public {
+        _setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
+        _initiate(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+
+        vm.prank(registrar);
+        vm.expectRevert("GracefulTransferDomainRegistry: zero cancellationEvidenceHash");
+        registry.cancelRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, bytes32(0));
     }
 
     function test_cancelRevocation_revertsAfterExpiry() public {

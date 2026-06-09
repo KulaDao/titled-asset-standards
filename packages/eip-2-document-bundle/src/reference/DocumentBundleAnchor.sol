@@ -29,7 +29,7 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         string calldata metadataURI
     ) external onlyRole(ANCHOR_ROLE) {
         require(bundleHash != bytes32(0), "DocumentBundleAnchor: zero bundleHash");
-        require(documentCount > 0,        "DocumentBundleAnchor: zero documentCount");
+        require(documentCount > 0, "DocumentBundleAnchor: zero documentCount");
 
         bytes32 tripleKey = _tripleKey(bundleHash, subjectId, role);
         require(_records[tripleKey].anchoredAt == 0, "DocumentBundleAnchor: already anchored");
@@ -51,12 +51,12 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         string calldata metadataURI
     ) external onlyRole(ANCHOR_ROLE) {
         require(newBundleHash != bytes32(0), "DocumentBundleAnchor: zero newBundleHash");
-        require(documentCount > 0,           "DocumentBundleAnchor: zero documentCount");
+        require(documentCount > 0, "DocumentBundleAnchor: zero documentCount");
 
         bytes32 oldTripleKey = _tripleKey(oldBundleHash, subjectId, role);
         AnchorRecord storage old = _records[oldTripleKey];
         require(old.anchoredAt != 0, "DocumentBundleAnchor: old bundle not anchored");
-        require(!old.superseded,     "DocumentBundleAnchor: old bundle already superseded");
+        require(!old.superseded, "DocumentBundleAnchor: old bundle already superseded");
 
         bytes32 slotKey = _slotKey(subjectId, role);
         require(_activeSlots[slotKey] == oldBundleHash, "DocumentBundleAnchor: old bundle not active for given slot");
@@ -69,7 +69,7 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         bytes32 newTripleKey = _tripleKey(newBundleHash, subjectId, role);
         require(_records[newTripleKey].anchoredAt == 0, "DocumentBundleAnchor: new bundle already anchored");
 
-        old.superseded   = true;
+        old.superseded = true;
         old.supersededBy = newBundleHash;
 
         emit BundleSuperseded(oldBundleHash, newBundleHash, subjectId, role);
@@ -78,7 +78,9 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
     }
 
     function getAnchor(bytes32 bundleHash, bytes32 subjectId, bytes32 role)
-        external view returns (AnchorRecord memory)
+        external
+        view
+        returns (AnchorRecord memory)
     {
         bytes32 key = _tripleKey(bundleHash, subjectId, role);
         require(_records[key].anchoredAt != 0, "DocumentBundleAnchor: not anchored");
@@ -102,8 +104,7 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
     }
 
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
-        return interfaceId == type(IDocumentBundleAnchor).interfaceId
-            || super.supportsInterface(interfaceId);
+        return interfaceId == type(IDocumentBundleAnchor).interfaceId || super.supportsInterface(interfaceId);
     }
 
     function _anchor(
@@ -117,15 +118,15 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
     ) internal {
         _activeSlots[slotKey] = bundleHash;
         _records[tripleKey] = AnchorRecord({
-            bundleHash:    bundleHash,
-            subjectId:     subjectId,
-            role:          role,
-            anchoredBy:    msg.sender,
-            anchoredAt:    uint64(block.timestamp),
+            bundleHash: bundleHash,
+            subjectId: subjectId,
+            role: role,
+            anchoredBy: msg.sender,
+            anchoredAt: uint64(block.timestamp),
             documentCount: documentCount,
-            metadataURI:   metadataURI,
-            superseded:    false,
-            supersededBy:  bytes32(0)
+            metadataURI: metadataURI,
+            superseded: false,
+            supersededBy: bytes32(0)
         });
         emit BundleAnchored(bundleHash, subjectId, role, documentCount);
     }

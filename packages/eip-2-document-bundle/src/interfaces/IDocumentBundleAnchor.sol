@@ -7,25 +7,19 @@ interface IDocumentBundleAnchor {
         bytes32 subjectId;
         bytes32 role;
         address anchoredBy;
-        uint64  anchoredAt;
+        uint64 anchoredAt;
         uint256 documentCount;
-        string  metadataURI;
-        bool    superseded;
+        string metadataURI;
+        bool superseded;
         bytes32 supersededBy;
     }
 
     event BundleAnchored(
-        bytes32 indexed bundleHash,
-        bytes32 indexed subjectId,
-        bytes32 indexed role,
-        uint256 documentCount
+        bytes32 indexed bundleHash, bytes32 indexed subjectId, bytes32 indexed role, uint256 documentCount
     );
 
     event BundleSuperseded(
-        bytes32 indexed oldBundleHash,
-        bytes32 indexed newBundleHash,
-        bytes32 indexed subjectId,
-        bytes32 role
+        bytes32 indexed oldBundleHash, bytes32 indexed newBundleHash, bytes32 indexed subjectId, bytes32 role
     );
 
     function anchorBundle(

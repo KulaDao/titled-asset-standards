@@ -29,6 +29,14 @@ median aggregation.
 - NAV basis IDs: `PER_UNIT`, `PER_SHARE`, `TOTAL`
 - Currency IDs: `USD`, `EUR`, `GBP`, `KES`, `ZMW`
 
+## Zero-Value Policy
+
+`methodologyHash` is a required commitment for every NAV snapshot and
+correction. The reference implementation rejects `bytes32(0)`. `methodologyURI`
+may be empty in this package until the methodology-discoverability cleanup is
+completed, but verifiers must still be able to reproduce or validate the
+nonzero methodology hash through documented off-chain context.
+
 ## Access Control
 
 The reference implementation is dependency-free and includes minimal role control:

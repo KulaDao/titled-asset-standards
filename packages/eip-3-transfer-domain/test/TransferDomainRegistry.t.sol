@@ -80,6 +80,12 @@ contract TransferDomainRegistryTest is Test {
         registry.setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
     }
 
+    function test_setRoute_revertsZeroPermissionEvidenceHash() public {
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero permissionEvidenceHash");
+        registry.setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, bytes32(0));
+    }
+
     function test_routesAreDirectional() public {
         _setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
 
@@ -147,6 +153,12 @@ contract TransferDomainRegistryTest is Test {
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, uint64(3_000_000));
         assertEq(route.permissionEvidenceHash, bytes32(0));
+    }
+
+    function test_revokeRoute_revertsZeroRevocationEvidenceHash() public {
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero revocationEvidenceHash");
+        registry.revokeRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, bytes32(0));
     }
 
     function test_revokeRoute_doesNotRevertIfAlreadyRevoked() public {

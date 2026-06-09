@@ -14,8 +14,8 @@ This checklist tracks the remaining implementation and documentation cleanup aft
 ## Recommended Order
 
 1. EIP-1 binding model fixes (complete)
-2. Cross-suite zero-value policy
-3. EIP-2 canonical hash hardening
+2. Cross-suite zero-value policy (complete)
+3. EIP-2 canonical hash hardening (complete)
 4. EIP-3 evidence semantics
 5. EIP-4 payload/evidence semantics
 6. EIP-5 attestation/methodology polish
@@ -30,20 +30,29 @@ This checklist tracks the remaining implementation and documentation cleanup aft
 
 ### Zero-Value Policy
 
-- [ ] Decide suite-wide whether `bytes32(0)` means "not provided" or is invalid for evidence/methodology/hash fields.
-- [ ] Apply the policy consistently across:
+- [x] Decide suite-wide whether `bytes32(0)` means "not provided" or is invalid for evidence/methodology/hash fields.
+- [x] Apply the policy consistently across:
   - EIP-3 route permission/revocation evidence hashes
   - EIP-4 compliance event evidence hashes
   - EIP-5 attestation evidence hashes
   - EIP-6 methodology hashes
-- [ ] Add tests for accepted/rejected zero values in each affected package.
-- [ ] Document the policy in every package README.
+- [x] Add tests for accepted/rejected zero values in each affected package.
+- [x] Document the policy in every package README.
 
 Acceptance criteria:
 
 - A reviewer can tell from the interface/README whether zero hashes are valid.
 - Code and tests match that policy.
 - No package silently accepts zero values where the docs imply required evidence.
+
+Implementation notes:
+
+- Required evidence and methodology hash fields are invalid when `bytes32(0)`.
+- EIP-3 rejects zero permission, revocation, graceful revocation, and cancellation evidence hashes.
+- EIP-4 rejects zero compliance event evidence hashes.
+- EIP-5 rejects zero attestation evidence hashes and already rejected zero methodology hashes.
+- EIP-6 rejects zero methodology hashes.
+- Evidence and methodology URI fields remain optional pointers unless a package-specific rule says otherwise.
 
 ### Interface / Reference Drift
 
@@ -187,31 +196,41 @@ Primary status: mostly resolved, but canonicalization can still be misused.
 
 ### Canonical Hash Path
 
-- [ ] Decide whether `computeBundleHash()` should sort internally or reject unsorted entries.
-- [ ] If keeping a pre-sorted API, add `computeCanonicalBundleHash()` or `requireSorted`.
-- [ ] Add tests proving unsorted input cannot accidentally be treated as canonical.
+- [x] Decide whether `computeBundleHash()` should sort internally or reject unsorted entries.
+- [x] If keeping a pre-sorted API, add `computeCanonicalBundleHash()` or `requireSorted`.
+- [x] Add tests proving unsorted input cannot accidentally be treated as canonical.
 
 Acceptance criteria:
 
 - There is one obvious safe path for computing canonical bundle hashes.
 
+Implementation notes:
+
+- `computeCanonicalBundleHash()` is the recommended safe path and sorts before hashing.
+- `computeBundleHash()` remains available for pre-sorted entries but rejects unsorted input.
+
 ### Subject / URI Validation
 
-- [?] Decide whether `bytes32(0)` subject is allowed.
-- [ ] If allowed, document it clearly as standalone mode and explain collision risk.
-- [ ] If not allowed, reject zero subject in `anchorBundle` and `supersedeBundle`.
-- [?] Decide whether empty `metadataURI` is allowed.
-- [ ] Add tests for the chosen behavior.
+- [x] Decide whether `bytes32(0)` subject is allowed.
+- [x] If allowed, document it clearly as standalone mode and explain collision risk.
+- [x] Not applicable: zero subject remains allowed, so no rejection was added to `anchorBundle` or `supersedeBundle`.
+- [x] Decide whether empty `metadataURI` is allowed.
+- [x] Add tests for the chosen behavior.
 
 Acceptance criteria:
 
 - Standalone anchoring behavior is explicit.
 - Empty metadata URI behavior is explicit.
 
+Implementation notes:
+
+- `bytes32(0)` subject is allowed as standalone mode.
+- Empty `metadataURI` is allowed and means no on-chain retrieval pointer is supplied.
+
 ### Schema Constant
 
-- [ ] Keep `EIP-XXXX:BUNDLE:V1` only if the README clearly marks it as pre-assignment.
-- [ ] Add a single pre-deployment checklist item to update all constants after EIP number assignment.
+- [x] Keep `EIP-XXXX:BUNDLE:V1` only if the README clearly marks it as pre-assignment.
+- [x] Add a single pre-deployment checklist item to update all constants after EIP number assignment.
 
 Acceptance criteria:
 
@@ -227,9 +246,9 @@ Primary status: mostly resolved.
 
 ### Evidence Hash Semantics
 
-- [ ] Define whether zero evidence hash is valid.
-- [ ] Either reject zero `permissionEvidenceHash` / `revocationEvidenceHash`, or document zero as "no evidence supplied."
-- [ ] Add tests for both immediate and graceful revocation paths.
+- [x] Define whether zero evidence hash is valid.
+- [x] Either reject zero `permissionEvidenceHash` / `revocationEvidenceHash`, or document zero as "no evidence supplied."
+- [x] Add tests for both immediate and graceful revocation paths.
 
 Acceptance criteria:
 
@@ -247,8 +266,8 @@ Acceptance criteria:
 
 ### Revert Wording
 
-- [ ] Update `revokeRoute()` NatSpec to qualify "MUST NOT revert" for authorized callers.
-- [ ] Confirm tests still cover nonexistent/already revoked routes.
+- [x] Update `revokeRoute()` NatSpec to qualify "MUST NOT revert" for authorized callers.
+- [x] Confirm tests still cover nonexistent/already revoked routes.
 
 Acceptance criteria:
 
@@ -264,9 +283,9 @@ Primary status: partially resolved.
 
 ### Evidence Hash Semantics
 
-- [ ] Define whether `evidenceHash == bytes32(0)` is valid.
-- [ ] Either reject zero evidence hashes or document zero as "no evidence provided."
-- [ ] Add tests for chosen behavior.
+- [x] Define whether `evidenceHash == bytes32(0)` is valid.
+- [x] Either reject zero evidence hashes or document zero as "no evidence provided."
+- [x] Add tests for chosen behavior.
 
 Acceptance criteria:
 
@@ -311,9 +330,9 @@ Primary status: core PR #15 fixes resolved, polish remains.
 
 ### Attestation Evidence Semantics
 
-- [ ] Define whether `evidenceHash == bytes32(0)` / empty `evidenceURI` is valid.
-- [ ] Either reject zero/empty attestation evidence or document it as an unsupported/no-evidence attestation.
-- [ ] Add tests.
+- [x] Define whether `evidenceHash == bytes32(0)` / empty `evidenceURI` is valid.
+- [x] Either reject zero/empty attestation evidence or document it as an unsupported/no-evidence attestation.
+- [x] Add tests.
 
 Acceptance criteria:
 
@@ -359,9 +378,9 @@ Primary status: mostly resolved; strongest implementation of the later packages.
 
 ### Methodology Validation
 
-- [ ] Require `methodologyHash != bytes32(0)`.
-- [ ] Require non-empty `methodologyURI`, or document empty URI semantics.
-- [ ] Add unit tests for both.
+- [x] Require `methodologyHash != bytes32(0)`.
+- [x] Require non-empty `methodologyURI`, or document empty URI semantics.
+- [x] Add unit tests for both.
 
 Acceptance criteria:
 

@@ -39,6 +39,8 @@ interface IComplianceEventLog {
         uint256 correctsIndex
     );
 
+    /// @dev MUST reject evidenceHash == bytes32(0). An empty evidenceURI is allowed,
+    ///      but the hash commitment itself is required.
     function recordEvent(
         bytes32 subjectId,
         bytes32 subjectType,

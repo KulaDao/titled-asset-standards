@@ -40,6 +40,7 @@ interface ITransferDomainRegistry {
 
     /// @notice Register a route as permitted.
     /// @dev MUST emit RouteSet. Only enables routes; use revokeRoute() to disable.
+    ///      MUST reject permissionEvidenceHash == bytes32(0).
     function setRoute(
         bytes32 sourceDomain,
         bytes32 destinationDomain,
@@ -49,7 +50,8 @@ interface ITransferDomainRegistry {
 
     /// @notice Revoke a route immediately.
     /// @dev MUST emit RouteRevoked. MUST NOT revert if the route does not exist
-    ///      or is already revoked.
+    ///      or is already revoked for an authorized caller with nonzero evidence.
+    ///      MUST reject revocationEvidenceHash == bytes32(0).
     function revokeRoute(
         bytes32 sourceDomain,
         bytes32 destinationDomain,
