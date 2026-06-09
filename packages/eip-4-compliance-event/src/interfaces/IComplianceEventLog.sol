@@ -59,6 +59,14 @@ interface IComplianceEventLog {
 
     function getEvent(bytes32 subjectId, uint256 eventIndex) external view returns (ComplianceEvent memory);
 
+    /// @notice Resolve the terminal event in a correction chain.
+    /// @dev MUST revert if eventIndex >= eventCount. Follows correctedByIndex until it reaches 0.
+    function currentEventIndex(bytes32 subjectId, uint256 eventIndex) external view returns (uint256);
+
+    /// @notice Return true when eventIndex has not been corrected.
+    /// @dev MUST revert if eventIndex >= eventCount.
+    function isEventCurrent(bytes32 subjectId, uint256 eventIndex) external view returns (bool);
+
     function eventCount(bytes32 subjectId) external view returns (uint256);
 
     function eventCountByType(bytes32 subjectId, bytes32 eventType) external view returns (uint256);

@@ -17,7 +17,7 @@ This checklist tracks the remaining implementation and documentation cleanup aft
 2. Cross-suite zero-value policy (complete)
 3. EIP-2 canonical hash hardening (complete)
 4. EIP-3 evidence semantics (complete)
-5. EIP-4 payload/evidence semantics
+5. EIP-4 payload/evidence semantics (complete)
 6. EIP-5 attestation/methodology polish
 7. EIP-6 methodology/currency guidance
 8. Root README and per-package limits pass
@@ -286,7 +286,7 @@ Acceptance criteria:
 
 Package: `packages/eip-4-compliance-event`
 
-Primary status: partially resolved.
+Primary status: resolved.
 
 ### Evidence Hash Semantics
 
@@ -300,32 +300,49 @@ Acceptance criteria:
 
 ### Payload Profile Semantics
 
-- [ ] Define schemas for base payload profiles in README and/or constants docs.
-- [ ] State that unknown payload profiles MUST be treated as opaque bytes.
-- [ ] If the reference implementation does not validate payload/profile compatibility, document that validation is application-level.
+- [x] Define schemas for base payload profiles in README and/or constants docs.
+- [x] State that unknown payload profiles MUST be treated as opaque bytes.
+- [x] If the reference implementation does not validate payload/profile compatibility, document that validation is application-level.
 
 Acceptance criteria:
 
 - Consumers know how to decode standard payload profiles and how to handle unknown ones.
 
+Implementation notes:
+
+- README and `ComplianceConstants.sol` define base payload ABI encodings.
+- Unknown payload profile IDs are accepted and stored as opaque bytes.
+- The reference implementation validates only payload size, not profile compatibility.
+
 ### Event Type / Outcome Matrix
 
-- [?] Decide whether the reference implementation should validate event type / outcome combinations.
-- [ ] If yes, add validation and tests.
-- [ ] If no, document that combinations are not constrained by the reference implementation.
+- [x] Decide whether the reference implementation should validate event type / outcome combinations.
+- [x] Not applicable: the reference implementation intentionally does not validate event type / outcome combinations.
+- [x] If no, document that combinations are not constrained by the reference implementation.
 
 Acceptance criteria:
 
 - Reviewers do not mistake unconstrained `bytes32` fields for validated compliance semantics.
 
+Implementation notes:
+
+- Event type / outcome matrix validation is application-layer policy.
+- Tests assert that an unconstrained combination is accepted and stored.
+
 ### Correction Current-State Guidance
 
-- [ ] Add package README guidance for resolving corrected/current event state.
-- [ ] Consider adding a helper getter if current-state lookup is expected on-chain.
+- [x] Add package README guidance for resolving corrected/current event state.
+- [x] Consider adding a helper getter if current-state lookup is expected on-chain.
 
 Acceptance criteria:
 
 - Consumers know that `EVT_CORRECTION` indexing alone does not provide a current-state resolver.
+
+Implementation notes:
+
+- Added `currentEventIndex(subjectId, eventIndex)` to resolve terminal correction-chain state.
+- Added `isEventCurrent(subjectId, eventIndex)` to check whether an event has not been corrected.
+- README warns that `latestEventByType()` is type-indexing only, not current-state resolution.
 
 ---
 

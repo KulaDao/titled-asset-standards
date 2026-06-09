@@ -117,6 +117,23 @@ contract ComplianceEventLog is IComplianceEventLog {
         return _copyEvent(_events[subjectId][eventIndex]);
     }
 
+    function currentEventIndex(bytes32 subjectId, uint256 eventIndex) external view returns (uint256) {
+        require(eventIndex < _events[subjectId].length, "ComplianceEventLog: eventIndex out of range");
+
+        uint256 current = eventIndex;
+        uint256 next = _events[subjectId][current].correctedByIndex;
+        while (next != 0) {
+            current = next;
+            next = _events[subjectId][current].correctedByIndex;
+        }
+        return current;
+    }
+
+    function isEventCurrent(bytes32 subjectId, uint256 eventIndex) external view returns (bool) {
+        require(eventIndex < _events[subjectId].length, "ComplianceEventLog: eventIndex out of range");
+        return _events[subjectId][eventIndex].correctedByIndex == 0;
+    }
+
     function eventCount(bytes32 subjectId) external view returns (uint256) {
         return _events[subjectId].length;
     }
