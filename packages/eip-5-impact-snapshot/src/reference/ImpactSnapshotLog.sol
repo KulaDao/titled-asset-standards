@@ -202,6 +202,7 @@ contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodolo
         string calldata evidenceURI
     ) external onlyRole(ATTESTOR_ROLE) returns (uint256 attestationIndex) {
         require(snapshotIndex < _snapshots[subjectId].length, "ImpactSnapshotLog: snapshotIndex out of range");
+        require(evidenceHash != bytes32(0), "ImpactSnapshotLog: zero evidenceHash");
         require(
             _snapshots[subjectId][snapshotIndex].reportedBy != msg.sender,
             "ImpactSnapshotLog: reporter cannot self-attest"

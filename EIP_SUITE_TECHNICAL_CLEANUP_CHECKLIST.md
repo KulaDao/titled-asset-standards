@@ -1,0 +1,475 @@
+# EIP Suite Technical Cleanup Checklist
+
+Audit source: `origin/main` at `0a18ece`.
+
+This checklist tracks the remaining implementation and documentation cleanup after the EIP-1 through EIP-6 review pass. The goal is to close interface/reference drift, remove ambiguity before EIP submission, and make the technical implementations match the strengthened whitepaper language.
+
+## Status Legend
+
+- `[ ]` Not started
+- `[~]` In progress
+- `[x]` Complete
+- `[?]` Needs product/legal decision before implementation
+
+## Recommended Order
+
+1. EIP-1 binding model fixes (complete)
+2. Cross-suite zero-value policy (complete)
+3. EIP-2 canonical hash hardening (complete)
+4. EIP-3 evidence semantics
+5. EIP-4 payload/evidence semantics
+6. EIP-5 attestation/methodology polish
+7. EIP-6 methodology/currency guidance
+8. Root README and per-package limits pass
+9. Medusa non-triviality assertions
+10. Full verification run
+
+---
+
+## Cross-Suite Cleanup
+
+### Zero-Value Policy
+
+- [x] Decide suite-wide whether `bytes32(0)` means "not provided" or is invalid for evidence/methodology/hash fields.
+- [x] Apply the policy consistently across:
+  - EIP-3 route permission/revocation evidence hashes
+  - EIP-4 compliance event evidence hashes
+  - EIP-5 attestation evidence hashes
+  - EIP-6 methodology hashes
+- [x] Add tests for accepted/rejected zero values in each affected package.
+- [x] Document the policy in every package README.
+
+Acceptance criteria:
+
+- A reviewer can tell from the interface/README whether zero hashes are valid.
+- Code and tests match that policy.
+- No package silently accepts zero values where the docs imply required evidence.
+
+Implementation notes:
+
+- Required evidence and methodology hash fields are invalid when `bytes32(0)`.
+- EIP-3 rejects zero permission, revocation, graceful revocation, and cancellation evidence hashes.
+- EIP-4 rejects zero compliance event evidence hashes.
+- EIP-5 rejects zero attestation evidence hashes and already rejected zero methodology hashes.
+- EIP-6 rejects zero methodology hashes.
+- Evidence and methodology URI fields remain optional pointers unless a package-specific rule says otherwise.
+
+### Interface / Reference Drift
+
+- [ ] For each required behavior implemented only in a reference contract, either move it into the public interface or explicitly mark it as reference-only.
+- [ ] Audit all package READMEs for "MUST" language that is not represented in interfaces or tests.
+- [ ] Add or update NatSpec for every non-obvious invariant.
+
+Acceptance criteria:
+
+- If a behavior is normative, it appears in the interface, extension interface, or required behavior section.
+- Reference-only choices are described as deployment choices, not standard requirements.
+
+### ERC-165 Posture
+
+- [ ] Standardize wording: ERC-165 is either required or recommended per package.
+- [ ] Confirm every reference implementation supports the claimed interface IDs.
+- [ ] Confirm tests cover positive and negative ERC-165 paths.
+- [ ] Add token-interface ERC-165 support where package docs rely on token interface detection.
+
+Acceptance criteria:
+
+- No package says consumers can detect an interface unless ERC-165 or an equivalent mechanism is implemented and tested.
+
+### Event Completeness
+
+- [ ] Check each append-only log/oracle event for fields indexers need without storage calls.
+- [ ] Add missing critical fields where appropriate:
+  - Methodology hash / URI references
+  - Correction references
+  - Subject/currency/role keys
+  - Provider/reporter/actor identity
+- [ ] Avoid adding large dynamic data to events unless clearly needed.
+
+Acceptance criteria:
+
+- Off-chain indexers can reconstruct timelines without excessive storage calls for core identifiers.
+
+### Known Limits Sections
+
+- [ ] Add a short "Known Limits" section to each package README.
+- [ ] Cover:
+  - No legal truth guarantee
+  - No global uniqueness across registries/chains
+  - No off-chain document availability guarantee
+  - No credentialing of reporters/providers/attestors unless implemented
+  - No fraud prevention, only tamper-evident records
+
+Acceptance criteria:
+
+- Each README states what the package does not prove.
+
+---
+
+## EIP-1: Asset-Bound Token Registry
+
+Package: `packages/eip-1-asset-registry`
+
+Primary status: resolved in the local cleanup branch.
+
+### Binding Mode Ambiguity
+
+- [x] Remove `tokenId = 0` as the whole-contract sentinel.
+- [x] Add explicit binding scope/mode, for example:
+  - `BINDING_SCOPE_CONTRACT`
+  - `BINDING_SCOPE_TOKEN_ID`
+- [x] Include scope in:
+  - `AnchorRecord`
+  - `bindToken` / replacement binding functions
+  - reverse binding key
+  - `TokenBound` event
+  - tests
+- [x] Confirm ERC-721/1155 token ID `0` can be bound as a token-specific binding.
+
+Implementation notes:
+
+- Added `AssetRegistryConstants` with canonical binding scope IDs.
+- Reverse uniqueness now keys by `(token, bindingScope, tokenId)`.
+- Added unit and invariant coverage for token-ID `0` vs whole-contract scope.
+
+Acceptance criteria:
+
+- Whole-contract binding and token ID `0` binding are distinguishable.
+- Reverse uniqueness includes binding scope.
+
+### Token Interface Split
+
+- [x] Split mixed token interface into whole-contract and per-token interfaces, or define exact unused-mode behavior.
+- [x] Suggested split:
+  - `IAssetBoundToken` for whole-contract anchors
+  - `IAssetBoundTokenId` for token ID anchors
+- [x] Add ERC-165 interface IDs for both if detection is expected.
+- [x] Update examples/tests.
+
+Implementation notes:
+
+- `IAssetBoundToken` and `IAssetBoundTokenId` now extend `IERC165`.
+- Removed the mixed `anchorId()` / `anchorIdOf()` requirement from a single token interface.
+
+Acceptance criteria:
+
+- ERC-20-style tokens are not forced to implement `anchorIdOf`.
+- ERC-721/1155-style tokens are not forced to implement a misleading `anchorId`.
+
+### Registry Interface Completeness
+
+- [x] Move reference-only `getMetadata`, `isActive`, `reattest`, and `deactivate` behavior into an interface or extension interface.
+- [x] Add `registeredBy` / owner semantics to the formal interface if authorization depends on it.
+- [x] Ensure expiry fields are exposed through interface-level getters.
+
+Implementation notes:
+
+- Added `IAssetAnchorRegistryLifecycle` for metadata, active status, registrar lookup, deactivation, and re-attestation.
+- Reference registry now supports ERC-165 for both the core and lifecycle interfaces.
+
+Acceptance criteria:
+
+- A third-party implementer can reproduce the active-anchor and re-attestation model from interfaces alone.
+
+### Metadata / Expiry Consistency
+
+- [x] Align README and code on expiry boundary: `block.timestamp >= expiresAt` or `block.timestamp > expiresAt`.
+- [x] Standardize `assetClass` and `jurisdiction` encoding.
+- [x] Replace inconsistent examples using `keccak256("EQUITY")` vs `bytes32("EQUITY")`.
+
+Implementation notes:
+
+- Reference expiry is inclusive: active while `block.timestamp <= expiresAt`, expired when `block.timestamp > expiresAt`.
+- README and tests now use domain-separated metadata IDs such as `keccak256("EIP-XXXX:ASSET_CLASS:EQUITY")`.
+
+Acceptance criteria:
+
+- Tests and docs use the same encoding and expiry boundary.
+
+---
+
+## EIP-2: Canonical Document Bundle Anchor
+
+Package: `packages/eip-2-document-bundle`
+
+Primary status: mostly resolved, but canonicalization can still be misused.
+
+### Canonical Hash Path
+
+- [x] Decide whether `computeBundleHash()` should sort internally or reject unsorted entries.
+- [x] If keeping a pre-sorted API, add `computeCanonicalBundleHash()` or `requireSorted`.
+- [x] Add tests proving unsorted input cannot accidentally be treated as canonical.
+
+Acceptance criteria:
+
+- There is one obvious safe path for computing canonical bundle hashes.
+
+Implementation notes:
+
+- `computeCanonicalBundleHash()` is the recommended safe path and sorts before hashing.
+- `computeBundleHash()` remains available for pre-sorted entries but rejects unsorted input.
+
+### Subject / URI Validation
+
+- [x] Decide whether `bytes32(0)` subject is allowed.
+- [x] If allowed, document it clearly as standalone mode and explain collision risk.
+- [x] Not applicable: zero subject remains allowed, so no rejection was added to `anchorBundle` or `supersedeBundle`.
+- [x] Decide whether empty `metadataURI` is allowed.
+- [x] Add tests for the chosen behavior.
+
+Acceptance criteria:
+
+- Standalone anchoring behavior is explicit.
+- Empty metadata URI behavior is explicit.
+
+Implementation notes:
+
+- `bytes32(0)` subject is allowed as standalone mode.
+- Empty `metadataURI` is allowed and means no on-chain retrieval pointer is supplied.
+
+### Schema Constant
+
+- [x] Keep `EIP-XXXX:BUNDLE:V1` only if the README clearly marks it as pre-assignment.
+- [x] Add a single pre-deployment checklist item to update all constants after EIP number assignment.
+
+Acceptance criteria:
+
+- No one can miss that constants are provisional.
+
+---
+
+## EIP-3: Directional Transfer Domain Registry
+
+Package: `packages/eip-3-transfer-domain`
+
+Primary status: mostly resolved.
+
+### Evidence Hash Semantics
+
+- [x] Define whether zero evidence hash is valid.
+- [x] Either reject zero `permissionEvidenceHash` / `revocationEvidenceHash`, or document zero as "no evidence supplied."
+- [x] Add tests for both immediate and graceful revocation paths.
+
+Acceptance criteria:
+
+- Zero evidence hash behavior is explicit and tested.
+
+### Revocation Evidence Retrieval
+
+- [?] Decide whether immediate `revocationEvidenceHash` must be readable on-chain after revocation.
+- [ ] If yes, add it to `Route` or a separate revocation record.
+- [ ] If no, update docs to say immediate revocation evidence is event-only, while graceful revocation evidence is retrievable through `getRevocation`.
+
+Acceptance criteria:
+
+- Docs no longer imply all revocation evidence is independently readable from route state unless it actually is.
+
+### Revert Wording
+
+- [x] Update `revokeRoute()` NatSpec to qualify "MUST NOT revert" for authorized callers.
+- [x] Confirm tests still cover nonexistent/already revoked routes.
+
+Acceptance criteria:
+
+- Interface wording does not imply unauthorized callers can revoke without revert.
+
+---
+
+## EIP-4: Subject-Linked Compliance Event Log
+
+Package: `packages/eip-4-compliance-event`
+
+Primary status: partially resolved.
+
+### Evidence Hash Semantics
+
+- [x] Define whether `evidenceHash == bytes32(0)` is valid.
+- [x] Either reject zero evidence hashes or document zero as "no evidence provided."
+- [x] Add tests for chosen behavior.
+
+Acceptance criteria:
+
+- Compliance records do not silently look documented when evidence is absent.
+
+### Payload Profile Semantics
+
+- [ ] Define schemas for base payload profiles in README and/or constants docs.
+- [ ] State that unknown payload profiles MUST be treated as opaque bytes.
+- [ ] If the reference implementation does not validate payload/profile compatibility, document that validation is application-level.
+
+Acceptance criteria:
+
+- Consumers know how to decode standard payload profiles and how to handle unknown ones.
+
+### Event Type / Outcome Matrix
+
+- [?] Decide whether the reference implementation should validate event type / outcome combinations.
+- [ ] If yes, add validation and tests.
+- [ ] If no, document that combinations are not constrained by the reference implementation.
+
+Acceptance criteria:
+
+- Reviewers do not mistake unconstrained `bytes32` fields for validated compliance semantics.
+
+### Correction Current-State Guidance
+
+- [ ] Add package README guidance for resolving corrected/current event state.
+- [ ] Consider adding a helper getter if current-state lookup is expected on-chain.
+
+Acceptance criteria:
+
+- Consumers know that `EVT_CORRECTION` indexing alone does not provide a current-state resolver.
+
+---
+
+## EIP-5: Subject-Linked Impact Snapshot Log
+
+Package: `packages/eip-5-impact-snapshot`
+
+Primary status: core PR #15 fixes resolved, polish remains.
+
+### Attestation Evidence Semantics
+
+- [x] Define whether `evidenceHash == bytes32(0)` / empty `evidenceURI` is valid.
+- [x] Either reject zero/empty attestation evidence or document it as an unsupported/no-evidence attestation.
+- [x] Add tests.
+
+Acceptance criteria:
+
+- Attestations cannot imply evidence exists when none is provided.
+
+### Methodology Supersession Discoverability
+
+- [ ] Add `newMethodologyURI` to `MethodologySuperseded`, or add a getter for pending methodology details.
+- [ ] Document how consumers discover pending methodology URI before activation.
+- [ ] Add tests.
+
+Acceptance criteria:
+
+- Methodology URI is discoverable for both active and pending methodologies.
+
+### README Warnings
+
+- [ ] Add warnings for privacy, double-counting/overlapping claims, and methodology URI/document availability.
+- [ ] Clarify "independent attestor" language: same reporter address is blocked, but credential independence is application-level.
+- [ ] Document custom indicator and unit naming rules.
+- [ ] Define overlapping period semantics.
+
+Acceptance criteria:
+
+- README no longer overstates what attestation/indicator semantics prove.
+
+### Medusa Non-Triviality
+
+- [ ] Add harness counters or invariants proving successful snapshots, corrections, and attestations happen.
+- [ ] Avoid silent no-op fuzz paths where all actions revert and invariants pass trivially.
+
+Acceptance criteria:
+
+- Fuzz success cannot be explained by swallowed reverts alone.
+
+---
+
+## EIP-6: Subject-Linked NAV Snapshot Oracle
+
+Package: `packages/eip-6-nav-oracle`
+
+Primary status: mostly resolved; strongest implementation of the later packages.
+
+### Methodology Validation
+
+- [x] Require `methodologyHash != bytes32(0)`.
+- [x] Require non-empty `methodologyURI`, or document empty URI semantics.
+- [x] Add unit tests for both.
+
+Acceptance criteria:
+
+- NAV snapshots cannot become methodology-free unless explicitly allowed.
+
+### ERC-4626 Integration Guidance
+
+- [ ] Add README warning that `latestNAVStatus()` may revert when unconfigured.
+- [ ] Recommend adapter/cached-value patterns for ERC-4626 `convertToAssets()` / `convertToShares()` if relevant.
+
+Acceptance criteria:
+
+- Vault integrators do not accidentally violate ERC-4626 expectations with a reverting oracle call.
+
+### Methodology Hash Derivation
+
+- [ ] Document whether `methodologyHash` is raw bytes, document bundle hash, or implementation-defined.
+- [ ] If EIP-2 document bundles are recommended, add example derivation.
+
+Acceptance criteria:
+
+- Consumers can reproduce or verify methodology hashes.
+
+### Currency Encoding
+
+- [ ] Add custom/token currency derivation guidance.
+- [ ] Example: `keccak256(abi.encodePacked("EIP-XXXX:CURRENCY:TOKEN", chainId, tokenAddress))`.
+- [ ] Add tests or constants if needed.
+
+Acceptance criteria:
+
+- Non-fiat NAV denominations are supported without ad hoc identifiers.
+
+---
+
+## Root README / Suite-Level Docs
+
+- [ ] Remove or qualify broad claims around legal compliance, regulatory acceptance, "canonical" status, and proof of real-world truth.
+- [ ] Make package numbering and descriptions consistent.
+- [ ] Link each package to its Known Limits section.
+- [ ] Add a "Pre-Submission Checklist" covering:
+  - Replace `EIP-XXXX`
+  - Confirm prior-art statuses
+  - Confirm reference implementation repo links
+  - Confirm test vectors where required
+  - Confirm Slither/Medusa availability in CI
+
+Acceptance criteria:
+
+- The root README markets the suite without overclaiming what the standards prove.
+
+---
+
+## Verification Plan
+
+Run per package after each package-specific patch:
+
+```bash
+cd /private/tmp/kula-eip-suite-audit-main/packages/<package>
+/Users/reagansimpson/.foundry/bin/forge fmt --check
+/Users/reagansimpson/.foundry/bin/forge build --sizes
+/Users/reagansimpson/.foundry/bin/forge test -vvv
+```
+
+Run from repo root after all patches:
+
+```bash
+cd /private/tmp/kula-eip-suite-audit-main
+git diff --check
+git status --short
+```
+
+If available locally or in CI:
+
+```bash
+slither .
+medusa fuzz
+```
+
+## PR Strategy
+
+Recommended PR split:
+
+1. `fix(eip-1): clarify binding scope and token interfaces`
+2. `fix(eip-2): harden canonical bundle hashing`
+3. `fix(eip-3): clarify evidence semantics`
+4. `fix(eip-4): define evidence and payload semantics`
+5. `fix(eip-5): improve attestation and methodology discoverability`
+6. `fix(eip-6): require methodology metadata and document integrations`
+7. `docs: align root README and known limits`
+
+If time is tight, combine 2 through 6 into one technical cleanup PR, but keep EIP-1 separate because it changes the core interface shape.

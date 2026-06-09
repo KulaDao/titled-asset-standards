@@ -190,6 +190,23 @@ contract NAVSnapshotOracleTest {
         oracle.publishNAV(SUBJECT, USD, PER_SHARE, type(int256).max, 2, T0, METHOD_1, "", NO_CORRECTION);
     }
 
+    function test_publishNAVRejectsZeroMethodologyHash() public {
+        vm.warp(T0);
+        vm.prank(PROVIDER_A);
+        vm.expectRevert(bytes("NAVSnapshotOracle: zero methodologyHash"));
+        oracle.publishNAV(SUBJECT, USD, PER_SHARE, 100, 2, T0, bytes32(0), "", NO_CORRECTION);
+    }
+
+    function test_publishNAVAllowsEmptyMethodologyURI() public {
+        vm.warp(T0);
+        vm.prank(PROVIDER_A);
+        uint256 idx = oracle.publishNAV(SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, "", NO_CORRECTION);
+
+        INAVSnapshotOracle.NAVSnapshot memory snap = oracle.getSnapshot(SUBJECT, USD, idx);
+        _assertEq(snap.methodologyHash, METHOD_1, "methodology hash");
+        _assertEq(snap.methodologyURI, "", "methodology uri");
+    }
+
     function test_publishNAVUsesDecimalAwareMagnitudeLimit() public {
         int256 maxDecimals18 = type(int256).max;
         uint256 idx = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, maxDecimals18, 18, T0, METHOD_1, NO_CORRECTION);

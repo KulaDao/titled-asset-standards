@@ -6,7 +6,7 @@ import {AssetAnchorRegistry} from "../src/reference/AssetAnchorRegistry.sol";
 
 contract DeployAssetAnchorRegistry is Script {
     function run() external returns (AssetAnchorRegistry registry) {
-        address admin      = vm.envAddress("ADMIN_ADDRESS");
+        address admin = vm.envAddress("ADMIN_ADDRESS");
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
 
         vm.startBroadcast(deployerKey);

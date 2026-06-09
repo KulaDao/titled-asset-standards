@@ -41,6 +41,8 @@ contract TransferDomainRegistry is ITransferDomainRegistry, AccessControl {
         bytes32 assetClass,
         bytes32 permissionEvidenceHash
     ) public virtual onlyRole(REGISTRAR_ROLE) {
+        require(permissionEvidenceHash != bytes32(0), "TransferDomainRegistry: zero permissionEvidenceHash");
+
         bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
         uint64 effectiveAt = _now64();
 
@@ -56,6 +58,8 @@ contract TransferDomainRegistry is ITransferDomainRegistry, AccessControl {
         bytes32 assetClass,
         bytes32 revocationEvidenceHash
     ) public virtual onlyRole(REGISTRAR_ROLE) {
+        require(revocationEvidenceHash != bytes32(0), "TransferDomainRegistry: zero revocationEvidenceHash");
+
         bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
         uint64 effectiveAt = _now64();
 

@@ -25,24 +25,24 @@ contract DocumentBundleAnchorFuzzTest {
         bytes32 role;
     }
 
-    Triple[]                     internal anchoredTriples;
-    mapping(bytes32 => address)  internal anchoredByOf;
-    mapping(bytes32 => bool)     internal wasSuperseded;
-    mapping(bytes32 => bytes32)  internal supersededByOf;
-    mapping(bytes32 => bytes32)  internal activeSlotOf;
+    Triple[] internal anchoredTriples;
+    mapping(bytes32 => address) internal anchoredByOf;
+    mapping(bytes32 => bool) internal wasSuperseded;
+    mapping(bytes32 => bytes32) internal supersededByOf;
+    mapping(bytes32 => bytes32) internal activeSlotOf;
 
     constructor() {
         // Deploy with address(this) as admin so the harness can call grantRole.
         anchor = new DocumentBundleAnchor(address(this));
         bytes32 anchorRole = anchor.ANCHOR_ROLE();
-        bytes32 adminRole  = anchor.DEFAULT_ADMIN_ROLE();
+        bytes32 adminRole = anchor.DEFAULT_ADMIN_ROLE();
         // Grant ANCHOR_ROLE + DEFAULT_ADMIN_ROLE to all Medusa sender addresses.
         anchor.grantRole(anchorRole, address(0x10000));
         anchor.grantRole(anchorRole, address(0x20000));
         anchor.grantRole(anchorRole, address(0x30000));
-        anchor.grantRole(adminRole,  address(0x10000));
-        anchor.grantRole(adminRole,  address(0x20000));
-        anchor.grantRole(adminRole,  address(0x30000));
+        anchor.grantRole(adminRole, address(0x10000));
+        anchor.grantRole(adminRole, address(0x20000));
+        anchor.grantRole(adminRole, address(0x30000));
 
         bundles.push(keccak256("bundle-A"));
         bundles.push(keccak256("bundle-B"));
@@ -60,8 +60,8 @@ contract DocumentBundleAnchorFuzzTest {
 
     function fuzz_anchorBundle(uint256 bIdx, uint256 sIdx, uint256 rIdx, uint256 docCount) external {
         bytes32 bundleHash = bundles[bIdx % bundles.length];
-        bytes32 subjectId  = subjects[sIdx % subjects.length];
-        bytes32 roleId     = roles[rIdx % roles.length];
+        bytes32 subjectId = subjects[sIdx % subjects.length];
+        bytes32 roleId = roles[rIdx % roles.length];
         if (docCount == 0 || docCount > 100) return;
 
         bytes32 tk = _tk(bundleHash, subjectId, roleId);
@@ -72,8 +72,8 @@ contract DocumentBundleAnchorFuzzTest {
 
         try anchor.anchorBundle(bundleHash, subjectId, roleId, docCount, "uri") {
             anchoredTriples.push(Triple(bundleHash, subjectId, roleId));
-            anchoredByOf[tk]  = address(this);
-            activeSlotOf[sk]  = bundleHash;
+            anchoredByOf[tk] = address(this);
+            activeSlotOf[sk] = bundleHash;
         } catch {}
     }
 
@@ -91,8 +91,8 @@ contract DocumentBundleAnchorFuzzTest {
         if (anchoredByOf[newTk] != address(0)) return;
 
         try anchor.supersedeBundle(t.bundle, newBundle, t.subject, t.role, docCount, "uri") {
-            wasSuperseded[tk]      = true;
-            supersededByOf[tk]     = newBundle;
+            wasSuperseded[tk] = true;
+            supersededByOf[tk] = newBundle;
             activeSlotOf[_sk(t.subject, t.role)] = newBundle;
 
             anchoredTriples.push(Triple(newBundle, t.subject, t.role));
@@ -105,16 +105,15 @@ contract DocumentBundleAnchorFuzzTest {
     /// Anchoring one triple must not mutate another triple's record.
     function property_anchoringOneTripleDoesNotMutateAnother() external view returns (bool) {
         for (uint256 i = 0; i < anchoredTriples.length; i++) {
-            Triple memory t  = anchoredTriples[i];
+            Triple memory t = anchoredTriples[i];
             bytes32 tk = _tk(t.bundle, t.subject, t.role);
             if (anchoredByOf[tk] == address(0)) continue;
 
-            IDocumentBundleAnchor.AnchorRecord memory rec =
-                anchor.getAnchor(t.bundle, t.subject, t.role);
+            IDocumentBundleAnchor.AnchorRecord memory rec = anchor.getAnchor(t.bundle, t.subject, t.role);
 
-            if (rec.bundleHash != t.bundle)  return false;
-            if (rec.subjectId  != t.subject) return false;
-            if (rec.role       != t.role)    return false;
+            if (rec.bundleHash != t.bundle) return false;
+            if (rec.subjectId != t.subject) return false;
+            if (rec.role != t.role) return false;
             if (rec.anchoredBy != anchoredByOf[tk]) return false;
         }
         return true;
@@ -124,9 +123,9 @@ contract DocumentBundleAnchorFuzzTest {
     function property_activeSlotsRemainPerSubjectRole() external view returns (bool) {
         for (uint256 s = 0; s < subjects.length; s++) {
             for (uint256 r = 0; r < roles.length; r++) {
-                bytes32 sk       = _sk(subjects[s], roles[r]);
+                bytes32 sk = _sk(subjects[s], roles[r]);
                 bytes32 expected = activeSlotOf[sk];
-                bytes32 actual   = anchor.activeBundle(subjects[s], roles[r]);
+                bytes32 actual = anchor.activeBundle(subjects[s], roles[r]);
                 if (actual != expected) return false;
             }
         }
@@ -140,14 +139,13 @@ contract DocumentBundleAnchorFuzzTest {
             bytes32 tk = _tk(t.bundle, t.subject, t.role);
             if (!wasSuperseded[tk]) continue;
 
-            IDocumentBundleAnchor.AnchorRecord memory rec =
-                anchor.getAnchor(t.bundle, t.subject, t.role);
+            IDocumentBundleAnchor.AnchorRecord memory rec = anchor.getAnchor(t.bundle, t.subject, t.role);
 
-            if (!rec.superseded)                         return false;
-            if (rec.supersededBy != supersededByOf[tk])  return false;
-            if (rec.bundleHash   != t.bundle)            return false;
-            if (rec.subjectId    != t.subject)           return false;
-            if (rec.role         != t.role)              return false;
+            if (!rec.superseded) return false;
+            if (rec.supersededBy != supersededByOf[tk]) return false;
+            if (rec.bundleHash != t.bundle) return false;
+            if (rec.subjectId != t.subject) return false;
+            if (rec.role != t.role) return false;
         }
         return true;
     }

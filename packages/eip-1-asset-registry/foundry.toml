@@ -11,6 +11,10 @@ remappings = [
 [lint]
 exclude_lints = ["asm-keccak256"]
 
+[invariant]
+runs = 64
+depth = 64
+
 [rpc_endpoints]
 sepolia = "${SEPOLIA_RPC_URL}"
 

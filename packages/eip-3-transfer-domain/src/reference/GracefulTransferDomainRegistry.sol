@@ -48,6 +48,8 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
         bytes32 assetClass,
         bytes32 revocationEvidenceHash
     ) external onlyRole(REGISTRAR_ROLE) {
+        require(revocationEvidenceHash != bytes32(0), "GracefulTransferDomainRegistry: zero revocationEvidenceHash");
+
         bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
         require(_isRoutePermitted(key), "GracefulTransferDomainRegistry: route not permitted");
         require(!_revocations[key].pending, "GracefulTransferDomainRegistry: revocation pending");
@@ -78,6 +80,8 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
         bytes32 assetClass,
         bytes32 cancellationEvidenceHash
     ) external onlyRole(REGISTRAR_ROLE) {
+        require(cancellationEvidenceHash != bytes32(0), "GracefulTransferDomainRegistry: zero cancellationEvidenceHash");
+
         bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
         Revocation memory revocation = _revocations[key];
 

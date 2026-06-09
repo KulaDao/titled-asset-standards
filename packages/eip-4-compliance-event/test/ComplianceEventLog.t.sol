@@ -154,6 +154,27 @@ contract ComplianceEventLogTest is Test {
         );
     }
 
+    function test_recordEventRejectsZeroEvidenceHash() public {
+        vm.warp(T0);
+        vm.prank(RECORDER);
+        vm.expectRevert(bytes("ComplianceEventLog: zero evidenceHash"));
+        eventLog.recordEvent(
+            SUBJECT,
+            SUBJECT_TOKEN,
+            EVT_TRANSFER,
+            OUTCOME_APPROVED,
+            AUTHORITY_INTERNAL_POLICY,
+            _transferParties(),
+            bytes32(0),
+            "",
+            PAYLOAD_TRANSFER_V1,
+            "",
+            OPERATION_REF,
+            T0,
+            NO_CORRECTION
+        );
+    }
+
     function test_recordEventRejectsTemporalViolations() public {
         vm.warp(T0);
         vm.prank(RECORDER);
