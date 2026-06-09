@@ -8,16 +8,19 @@ import {
     SUBJECT_TOKEN,
     EVT_TRANSFER,
     EVT_FREEZE,
+    EVT_KYC_APPROVED,
     EVT_CORRECTION,
     ROLE_SENDER,
     ROLE_RECEIVER,
     ROLE_TARGET,
     OUTCOME_APPROVED,
     OUTCOME_EXECUTED,
+    OUTCOME_EXPIRED,
     AUTHORITY_INTERNAL_POLICY,
     AUTHORITY_COURT_ORDER,
     PAYLOAD_TRANSFER_V1,
-    PAYLOAD_FREEZE_V1
+    PAYLOAD_FREEZE_V1,
+    PAYLOAD_KYC_V1
 } from "../src/libraries/ComplianceConstants.sol";
 
 contract ComplianceEventLogTest is Test {
@@ -541,9 +544,106 @@ contract ComplianceEventLogTest is Test {
         assertEq(eventLog.latestEventByType(SUBJECT, EVT_FREEZE), 1, "latest freeze");
     }
 
+    function test_recordEventAcceptsUnknownPayloadProfileAsOpaque() public {
+        bytes32 customProfile = keccak256("APP:PAYLOAD:CUSTOM:V1");
+        bytes memory opaquePayload = abi.encode(keccak256("opaque"), uint256(42), ALICE);
+
+        uint256 index = _record(
+            RECORDER,
+            SUBJECT,
+            EVT_TRANSFER,
+            OUTCOME_APPROVED,
+            AUTHORITY_INTERNAL_POLICY,
+            _transferParties(),
+            customProfile,
+            opaquePayload,
+            T0,
+            NO_CORRECTION
+        );
+
+        IComplianceEventLog.ComplianceEvent memory stored = eventLog.getEvent(SUBJECT, index);
+        assertEq(stored.payloadProfileId, customProfile, "custom profile stored");
+        assertEq(keccak256(stored.payload), keccak256(opaquePayload), "opaque payload stored");
+    }
+
+    function test_recordEventDoesNotValidateEventTypeOutcomeMatrix() public {
+        IComplianceEventLog.Party[] memory parties = new IComplianceEventLog.Party[](0);
+
+        uint256 index = _record(
+            RECORDER,
+            SUBJECT,
+            EVT_KYC_APPROVED,
+            OUTCOME_EXPIRED,
+            AUTHORITY_INTERNAL_POLICY,
+            parties,
+            PAYLOAD_KYC_V1,
+            "",
+            T0,
+            NO_CORRECTION
+        );
+
+        IComplianceEventLog.ComplianceEvent memory stored = eventLog.getEvent(SUBJECT, index);
+        assertEq(stored.eventType, EVT_KYC_APPROVED, "event type stored");
+        assertEq(stored.outcome, OUTCOME_EXPIRED, "unconstrained outcome stored");
+    }
+
+    function test_currentEventIndexFollowsCorrectionChain() public {
+        uint256 original = _record(
+            RECORDER,
+            SUBJECT,
+            EVT_TRANSFER,
+            OUTCOME_APPROVED,
+            AUTHORITY_INTERNAL_POLICY,
+            _transferParties(),
+            PAYLOAD_TRANSFER_V1,
+            abi.encode(ALICE, BOB, uint256(100), bytes32(0)),
+            T0,
+            NO_CORRECTION
+        );
+
+        uint256 correction = _record(
+            RECORDER,
+            SUBJECT,
+            EVT_CORRECTION,
+            OUTCOME_EXECUTED,
+            AUTHORITY_INTERNAL_POLICY,
+            _transferParties(),
+            PAYLOAD_TRANSFER_V1,
+            abi.encode(EVT_TRANSFER, original),
+            T0 + 1,
+            original
+        );
+
+        uint256 terminal = _record(
+            RECORDER,
+            SUBJECT,
+            EVT_CORRECTION,
+            OUTCOME_EXECUTED,
+            AUTHORITY_INTERNAL_POLICY,
+            _transferParties(),
+            PAYLOAD_TRANSFER_V1,
+            abi.encode(EVT_CORRECTION, correction),
+            T0 + 2,
+            correction
+        );
+
+        assertEq(eventLog.currentEventIndex(SUBJECT, original), terminal, "original resolves to terminal");
+        assertEq(eventLog.currentEventIndex(SUBJECT, correction), terminal, "correction resolves to terminal");
+        assertEq(eventLog.currentEventIndex(SUBJECT, terminal), terminal, "terminal resolves to self");
+        assertFalse(eventLog.isEventCurrent(SUBJECT, original), "original corrected");
+        assertFalse(eventLog.isEventCurrent(SUBJECT, correction), "middle correction corrected");
+        assertTrue(eventLog.isEventCurrent(SUBJECT, terminal), "terminal current");
+    }
+
     function test_gettersRevertForInvalidIndices() public {
         vm.expectRevert(bytes("ComplianceEventLog: eventIndex out of range"));
         eventLog.getEvent(SUBJECT, 0);
+
+        vm.expectRevert(bytes("ComplianceEventLog: eventIndex out of range"));
+        eventLog.currentEventIndex(SUBJECT, 0);
+
+        vm.expectRevert(bytes("ComplianceEventLog: eventIndex out of range"));
+        eventLog.isEventCurrent(SUBJECT, 0);
 
         vm.expectRevert(bytes("ComplianceEventLog: ordinal out of range"));
         eventLog.eventByTypeAt(SUBJECT, EVT_TRANSFER, 0);

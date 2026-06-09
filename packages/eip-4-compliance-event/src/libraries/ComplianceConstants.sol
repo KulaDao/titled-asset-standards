@@ -45,7 +45,22 @@ bytes32 constant AUTHORITY_INTERNAL_POLICY = keccak256("EIP-XXXX:AUTHORITY:INTER
 bytes32 constant AUTHORITY_COURT_ORDER = keccak256("EIP-XXXX:AUTHORITY:COURT_ORDER:V1");
 bytes32 constant AUTHORITY_REGULATOR = keccak256("EIP-XXXX:AUTHORITY:REGULATOR:V1");
 
-// Payload profile identifiers
+// Payload profile identifiers.
+//
+// PAYLOAD_TRANSFER_V1:
+//   abi.encode(address from, address to, uint256 amount, bytes32 routeRef)
+//
+// PAYLOAD_FREEZE_V1:
+//   abi.encode(address target, uint256 amount, uint64 expiresAt, bytes32 reason)
+//
+// PAYLOAD_KYC_V1:
+//   abi.encode(address subject, bytes32 jurisdiction, bytes32 riskTier, uint64 expiresAt)
+//
+// PAYLOAD_FORCED_TRANSFER_V1:
+//   abi.encode(address from, address to, uint256 amount, bytes32 legalBasis)
+//
+// Unknown payload profile identifiers are allowed by the reference implementation
+// and must be treated as opaque bytes by consumers.
 bytes32 constant PAYLOAD_TRANSFER_V1 = keccak256("EIP-XXXX:PAYLOAD:TRANSFER:V1");
 bytes32 constant PAYLOAD_FREEZE_V1 = keccak256("EIP-XXXX:PAYLOAD:FREEZE:V1");
 bytes32 constant PAYLOAD_KYC_V1 = keccak256("EIP-XXXX:PAYLOAD:KYC:V1");
