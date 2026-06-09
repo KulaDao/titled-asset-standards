@@ -10,3 +10,7 @@ bytes32 constant EUR = keccak256("EIP-XXXX:CURRENCY:EUR");
 bytes32 constant GBP = keccak256("EIP-XXXX:CURRENCY:GBP");
 bytes32 constant KES = keccak256("EIP-XXXX:CURRENCY:KES");
 bytes32 constant ZMW = keccak256("EIP-XXXX:CURRENCY:ZMW");
+
+function deriveTokenCurrency(uint256 chainId, address tokenAddress) pure returns (bytes32) {
+    return keccak256(abi.encodePacked("EIP-XXXX:CURRENCY:TOKEN", chainId, tokenAddress));
+}

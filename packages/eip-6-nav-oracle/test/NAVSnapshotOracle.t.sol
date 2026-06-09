@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {INAVSnapshotOracle, NO_CORRECTION} from "../src/interfaces/INAVSnapshotOracle.sol";
 import {INAVAggregation} from "../src/interfaces/INAVAggregation.sol";
 import {NAVSnapshotOracle} from "../src/reference/NAVSnapshotOracle.sol";
-import {EUR, PER_SHARE, PER_UNIT, TOTAL, USD} from "../src/libraries/NAVConstants.sol";
+import {EUR, PER_SHARE, PER_UNIT, TOTAL, USD, deriveTokenCurrency} from "../src/libraries/NAVConstants.sol";
 
 interface Vm {
     function expectRevert(bytes calldata revertData) external;
@@ -510,6 +510,13 @@ contract NAVSnapshotOracleTest {
         vm.expectEmit(true, true, false, true);
         emit NAVDeviationDetected(SUBJECT, USD, T0, normalizedMin, huge, type(uint256).max);
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, huge, 18, T0, METHOD_1, NO_CORRECTION);
+    }
+
+    function test_deriveTokenCurrencyUsesChainAndTokenDomain() public pure {
+        address token = address(0xC0FFEE);
+        bytes32 expected = keccak256(abi.encodePacked("EIP-XXXX:CURRENCY:TOKEN", uint256(1), token));
+
+        _assertEq(deriveTokenCurrency(1, token), expected, "token currency derivation");
     }
 
     function test_supportsInterfaces() public view {
