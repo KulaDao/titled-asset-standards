@@ -28,14 +28,61 @@ median aggregation.
 
 - NAV basis IDs: `PER_UNIT`, `PER_SHARE`, `TOTAL`
 - Currency IDs: `USD`, `EUR`, `GBP`, `KES`, `ZMW`
+- Token-denominated currency derivation:
+  `deriveTokenCurrency(chainId, tokenAddress)`, equivalent to
+  `keccak256(abi.encodePacked("EIP-XXXX:CURRENCY:TOKEN", chainId, tokenAddress))`
+
+Fiat currencies use `keccak256("EIP-XXXX:CURRENCY:<ISO4217>")`. Token
+currencies include both `chainId` and `tokenAddress` so the same token address
+on two chains does not collide. Other custom denominations should use an
+application-documented, domain-separated string and should not reuse an ISO
+4217 code unless the denomination is actually that fiat currency.
 
 ## Zero-Value Policy
 
 `methodologyHash` is a required commitment for every NAV snapshot and
-correction. The reference implementation rejects `bytes32(0)`. `methodologyURI`
-may be empty in this package until the methodology-discoverability cleanup is
-completed, but verifiers must still be able to reproduce or validate the
-nonzero methodology hash through documented off-chain context.
+correction. The reference implementation rejects `bytes32(0)`.
+`methodologyURI` may be empty only when the implementation documents how
+verifiers retrieve the methodology out of band. A nonzero hash without a
+retrievable or reproducible methodology document is not independently
+verifiable.
+
+## Methodology Hash Derivation
+
+The reference implementation stores `methodologyHash` and `methodologyURI`
+without interpreting the document format. Deployments must document the hash
+derivation they use. Recommended derivations are:
+
+- Raw document commitment: `keccak256(methodologyDocumentBytes)`.
+- EIP-2 document bundle commitment: use the canonical bundle hash when the
+  methodology is a bundle of documents or when deterministic document
+  normalization is required.
+
+When an EIP-2 bundle is used, `methodologyURI` should resolve to metadata that
+identifies the bundle manifest and the normalization profiles needed to
+reproduce the hash. When raw document bytes are used, `methodologyURI` should
+resolve to those exact bytes or metadata that makes the retrieval path
+unambiguous.
+
+## ERC-4626 Integration Guidance
+
+`latestNAVStatus()` and `aggregatedNAV()` revert until staleness configuration
+is set for the `(subjectId, currency)` stream. ERC-4626 `convertToAssets()` and
+`convertToShares()` integrations should not call these functions directly unless
+the stream is guaranteed to be configured before the vault is enabled. A direct
+unconfigured call can make ERC-4626 conversion functions revert unexpectedly.
+
+Recommended integration patterns:
+
+- Use an adapter that checks configuration during vault setup and exposes a
+  non-reverting cached NAV to conversion functions.
+- Keep subscription/redemption pricing in state-changing request or settlement
+  functions, where stale or unconfigured NAV can be handled with explicit
+  reverts and user-facing errors.
+- Cache the last accepted NAV after validating `latestNAVStatus()` or
+  `aggregatedNAV()`, then have conversion preview paths read the cached value.
+- Treat `latestNAV()` as raw data only. Pricing paths should use staleness-aware
+  validation before accepting a NAV.
 
 ## Access Control
 
@@ -64,3 +111,15 @@ medusa fuzz
 
 The constants use `EIP-XXXX` domain strings. These domain strings should be updated
 once the EIP number is assigned and before any production deployment.
+
+## Known Limits
+
+- NAV is an accounting or valuation input, not a liquid executable market price.
+- Provider submissions are trusted assertions; the contract does not verify
+  valuation accuracy or provider credentials.
+- Methodology hashes are only independently useful when the methodology document
+  remains available and its hash derivation is documented.
+- Staleness flags protect consumers only when integrations check them before
+  accepting a NAV.
+- Aggregation reduces single-provider risk but does not prevent provider
+  collusion or shared methodology errors.

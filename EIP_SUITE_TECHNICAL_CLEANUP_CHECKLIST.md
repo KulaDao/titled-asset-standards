@@ -19,7 +19,7 @@ This checklist tracks the remaining implementation and documentation cleanup aft
 4. EIP-3 evidence semantics (complete)
 5. EIP-4 payload/evidence semantics (complete)
 6. EIP-5 attestation/methodology polish (complete)
-7. EIP-6 methodology/currency guidance
+7. EIP-6 methodology/currency guidance (complete)
 8. Root README and per-package limits pass
 9. Medusa non-triviality assertions
 10. Full verification run
@@ -415,7 +415,7 @@ Implementation notes:
 
 Package: `packages/eip-6-nav-oracle`
 
-Primary status: mostly resolved; strongest implementation of the later packages.
+Primary status: resolved.
 
 ### Methodology Validation
 
@@ -429,31 +429,48 @@ Acceptance criteria:
 
 ### ERC-4626 Integration Guidance
 
-- [ ] Add README warning that `latestNAVStatus()` may revert when unconfigured.
-- [ ] Recommend adapter/cached-value patterns for ERC-4626 `convertToAssets()` / `convertToShares()` if relevant.
+- [x] Add README warning that `latestNAVStatus()` may revert when unconfigured.
+- [x] Recommend adapter/cached-value patterns for ERC-4626 `convertToAssets()` / `convertToShares()` if relevant.
 
 Acceptance criteria:
 
 - Vault integrators do not accidentally violate ERC-4626 expectations with a reverting oracle call.
 
+Implementation notes:
+
+- README warns that `latestNAVStatus()` and `aggregatedNAV()` revert until staleness config is set.
+- README recommends adapters, cached accepted NAV values, and state-changing pricing paths instead of direct unconfigured oracle calls from ERC-4626 conversion functions.
+
 ### Methodology Hash Derivation
 
-- [ ] Document whether `methodologyHash` is raw bytes, document bundle hash, or implementation-defined.
-- [ ] If EIP-2 document bundles are recommended, add example derivation.
+- [x] Document whether `methodologyHash` is raw bytes, document bundle hash, or implementation-defined.
+- [x] If EIP-2 document bundles are recommended, add example derivation.
 
 Acceptance criteria:
 
 - Consumers can reproduce or verify methodology hashes.
 
+Implementation notes:
+
+- README documents the reference implementation as storage-only for methodology fields.
+- Recommended derivations are `keccak256(methodologyDocumentBytes)` or an EIP-2 canonical document bundle hash.
+- README documents what `methodologyURI` should resolve to for each derivation path.
+
 ### Currency Encoding
 
-- [ ] Add custom/token currency derivation guidance.
-- [ ] Example: `keccak256(abi.encodePacked("EIP-XXXX:CURRENCY:TOKEN", chainId, tokenAddress))`.
-- [ ] Add tests or constants if needed.
+- [x] Add custom/token currency derivation guidance.
+- [x] Example: `keccak256(abi.encodePacked("EIP-XXXX:CURRENCY:TOKEN", chainId, tokenAddress))`.
+- [x] Add tests or constants if needed.
 
 Acceptance criteria:
 
 - Non-fiat NAV denominations are supported without ad hoc identifiers.
+
+Implementation notes:
+
+- Added `deriveTokenCurrency(chainId, tokenAddress)` to `NAVConstants.sol`.
+- Added a unit test for the exact token currency domain string.
+- README documents fiat, token, and other custom denomination conventions.
 
 ---
 
