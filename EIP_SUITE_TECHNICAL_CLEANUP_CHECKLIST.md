@@ -16,7 +16,7 @@ This checklist tracks the remaining implementation and documentation cleanup aft
 1. EIP-1 binding model fixes (complete)
 2. Cross-suite zero-value policy (complete)
 3. EIP-2 canonical hash hardening (complete)
-4. EIP-3 evidence semantics
+4. EIP-3 evidence semantics (complete)
 5. EIP-4 payload/evidence semantics
 6. EIP-5 attestation/methodology polish
 7. EIP-6 methodology/currency guidance
@@ -242,7 +242,7 @@ Acceptance criteria:
 
 Package: `packages/eip-3-transfer-domain`
 
-Primary status: mostly resolved.
+Primary status: resolved.
 
 ### Evidence Hash Semantics
 
@@ -256,13 +256,20 @@ Acceptance criteria:
 
 ### Revocation Evidence Retrieval
 
-- [?] Decide whether immediate `revocationEvidenceHash` must be readable on-chain after revocation.
-- [ ] If yes, add it to `Route` or a separate revocation record.
-- [ ] If no, update docs to say immediate revocation evidence is event-only, while graceful revocation evidence is retrievable through `getRevocation`.
+- [x] Decide whether immediate `revocationEvidenceHash` must be readable on-chain after revocation.
+- [x] If yes, add it to `Route` or a separate revocation record.
+- [x] Not applicable: immediate revocation evidence is readable on-chain from `Route`.
 
 Acceptance criteria:
 
 - Docs no longer imply all revocation evidence is independently readable from route state unless it actually is.
+
+Implementation notes:
+
+- `Route` now includes `revocationEvidenceHash`.
+- Immediate revocation stores revocation evidence directly on the route.
+- Graceful revocation keeps pending evidence in `getRevocation()` and exposes it through `getRoute()` once the grace period has expired.
+- Re-enabling a route clears prior route-level revocation evidence.
 
 ### Revert Wording
 

@@ -155,12 +155,18 @@ contract GracefulTransferDomainRegistryTest is Test {
         IGracefulRouteRevocation.Revocation memory revocation =
             registry.getRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
 
+        vm.warp(revocation.effectiveAt - 1);
+        ITransferDomainRegistry.Route memory pendingRoute = registry.getRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+        assertTrue(pendingRoute.permitted);
+        assertEq(pendingRoute.revocationEvidenceHash, bytes32(0));
+
         vm.warp(revocation.effectiveAt);
         ITransferDomainRegistry.Route memory route = registry.getRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
 
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, revocation.effectiveAt);
         assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE);
+        assertEq(route.revocationEvidenceHash, REVOCATION_EVIDENCE);
     }
 
     function test_finalizeRevocation_afterGracePeriodEmitsOnceAndStoresFinalizedState() public {
@@ -187,6 +193,7 @@ contract GracefulTransferDomainRegistryTest is Test {
         assertTrue(afterFinalize.finalized);
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, beforeFinalize.effectiveAt);
+        assertEq(route.revocationEvidenceHash, REVOCATION_EVIDENCE);
 
         vm.prank(registrar);
         vm.expectRevert("GracefulTransferDomainRegistry: already finalized");
@@ -213,6 +220,7 @@ contract GracefulTransferDomainRegistryTest is Test {
         assertTrue(afterFinalize.finalized);
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, beforeFinalize.effectiveAt);
+        assertEq(route.revocationEvidenceHash, REVOCATION_EVIDENCE);
     }
 
     function test_finalizeRevocation_revertsBeforeGracePeriodExpires() public {
@@ -295,8 +303,10 @@ contract GracefulTransferDomainRegistryTest is Test {
 
         IGracefulRouteRevocation.Revocation memory revocation =
             registry.getRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+        ITransferDomainRegistry.Route memory route = registry.getRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
 
         assertFalse(registry.isRoutePermitted(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL));
+        assertEq(route.revocationEvidenceHash, REVOCATION_EVIDENCE);
         assertFalse(revocation.pending);
         assertFalse(revocation.finalized);
     }
@@ -323,6 +333,7 @@ contract GracefulTransferDomainRegistryTest is Test {
         assertTrue(route.permitted);
         assertEq(route.effectiveAt, expectedEffectiveAt);
         assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE_2);
+        assertEq(route.revocationEvidenceHash, bytes32(0));
         assertEq(reset.initiatedAt, 0);
         assertEq(reset.effectiveAt, 0);
         assertEq(reset.revocationEvidenceHash, bytes32(0));
@@ -352,6 +363,7 @@ contract GracefulTransferDomainRegistryTest is Test {
 
         assertTrue(route.permitted);
         assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE_2);
+        assertEq(route.revocationEvidenceHash, bytes32(0));
         assertFalse(reset.pending);
         assertFalse(reset.finalized);
     }

@@ -105,6 +105,7 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
         revocation.finalized = true;
         _routes[key].permitted = false;
         _routes[key].effectiveAt = revocation.effectiveAt;
+        _routes[key].revocationEvidenceHash = revocation.revocationEvidenceHash;
 
         emit RouteRevoked(
             sourceDomain, destinationDomain, assetClass, revocation.revocationEvidenceHash, revocation.effectiveAt
@@ -131,6 +132,7 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
         if (revocation.pending && block.timestamp >= revocation.effectiveAt) {
             route.permitted = false;
             route.effectiveAt = revocation.effectiveAt;
+            route.revocationEvidenceHash = revocation.revocationEvidenceHash;
         }
     }
 }
