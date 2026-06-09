@@ -23,4 +23,17 @@ interface IMethodologyVersioning {
         external
         view
         returns (bytes32 methodologyHash, string memory methodologyURI);
+
+    /// @notice Return the future methodology supersession, if one is scheduled.
+    /// @dev Returns pending = false when there is no future-only supersession
+    ///      or when the scheduled ordinal has already been reached.
+    function pendingMethodology(bytes32 subjectId, bytes32 indicatorId)
+        external
+        view
+        returns (
+            bytes32 newMethodologyHash,
+            string memory newMethodologyURI,
+            uint256 effectiveFromOrdinal,
+            bool pending
+        );
 }

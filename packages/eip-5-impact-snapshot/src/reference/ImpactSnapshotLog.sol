@@ -293,6 +293,30 @@ contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodolo
         return (_activeMethodologyHash[subjectId][indicatorId], _activeMethodologyUri[subjectId][indicatorId]);
     }
 
+    function pendingMethodology(bytes32 subjectId, bytes32 indicatorId)
+        external
+        view
+        returns (
+            bytes32 newMethodologyHash,
+            string memory newMethodologyURI,
+            uint256 effectiveFromOrdinal,
+            bool pending
+        )
+    {
+        PendingMethodology storage pendingRecord = _pendingMethodology[subjectId][indicatorId];
+        if (!pendingRecord.pending) return (bytes32(0), "", 0, false);
+        if (_indicatorIndices[subjectId][indicatorId].length >= pendingRecord.effectiveFromOrdinal) {
+            return (bytes32(0), "", 0, false);
+        }
+        return
+            (
+                pendingRecord.newMethodologyHash,
+                pendingRecord.newMethodologyUri,
+                pendingRecord.effectiveFromOrdinal,
+                true
+            );
+    }
+
     // -------------------------------------------------------------------------
     // ERC-165
     // -------------------------------------------------------------------------
