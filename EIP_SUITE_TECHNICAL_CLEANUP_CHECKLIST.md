@@ -18,7 +18,7 @@ This checklist tracks the remaining implementation and documentation cleanup aft
 3. EIP-2 canonical hash hardening (complete)
 4. EIP-3 evidence semantics (complete)
 5. EIP-4 payload/evidence semantics (complete)
-6. EIP-5 attestation/methodology polish
+6. EIP-5 attestation/methodology polish (complete)
 7. EIP-6 methodology/currency guidance
 8. Root README and per-package limits pass
 9. Medusa non-triviality assertions
@@ -350,7 +350,7 @@ Implementation notes:
 
 Package: `packages/eip-5-impact-snapshot`
 
-Primary status: core PR #15 fixes resolved, polish remains.
+Primary status: resolved.
 
 ### Attestation Evidence Semantics
 
@@ -364,33 +364,50 @@ Acceptance criteria:
 
 ### Methodology Supersession Discoverability
 
-- [ ] Add `newMethodologyURI` to `MethodologySuperseded`, or add a getter for pending methodology details.
-- [ ] Document how consumers discover pending methodology URI before activation.
-- [ ] Add tests.
+- [x] Add `newMethodologyURI` to `MethodologySuperseded`, or add a getter for pending methodology details.
+- [x] Document how consumers discover pending methodology URI before activation.
+- [x] Add tests.
 
 Acceptance criteria:
 
 - Methodology URI is discoverable for both active and pending methodologies.
 
+Implementation notes:
+
+- Added `pendingMethodology(subjectId, indicatorId)` to expose scheduled future methodology hash, URI, and effective ordinal.
+- `activeMethodology()` remains the source for currently effective methodology details.
+- Unit tests cover pending URI/hash visibility before activation and cleared pending state after activation.
+
 ### README Warnings
 
-- [ ] Add warnings for privacy, double-counting/overlapping claims, and methodology URI/document availability.
-- [ ] Clarify "independent attestor" language: same reporter address is blocked, but credential independence is application-level.
-- [ ] Document custom indicator and unit naming rules.
-- [ ] Define overlapping period semantics.
+- [x] Add warnings for privacy, double-counting/overlapping claims, and methodology URI/document availability.
+- [x] Clarify "independent attestor" language: same reporter address is blocked, but credential independence is application-level.
+- [x] Document custom indicator and unit naming rules.
+- [x] Define overlapping period semantics.
 
 Acceptance criteria:
 
 - README no longer overstates what attestation/indicator semantics prove.
 
+Implementation notes:
+
+- README now calls attestation role-gated rather than intrinsically independent.
+- README documents overlapping periods as allowed and exact duplicate originals as rejected.
+- README adds custom indicator, canonical unit, privacy, double-counting, and document availability guidance.
+
 ### Medusa Non-Triviality
 
-- [ ] Add harness counters or invariants proving successful snapshots, corrections, and attestations happen.
-- [ ] Avoid silent no-op fuzz paths where all actions revert and invariants pass trivially.
+- [x] Add harness counters or invariants proving successful snapshots, corrections, and attestations happen.
+- [x] Avoid silent no-op fuzz paths where all actions revert and invariants pass trivially.
 
 Acceptance criteria:
 
 - Fuzz success cannot be explained by swallowed reverts alone.
+
+Implementation notes:
+
+- Medusa harness seeds one original snapshot, one correction, and one attestation in the constructor.
+- Added success counters and `property_nonTrivialActionsSucceeded()` so all-revert fuzz paths cannot satisfy the suite silently.
 
 ---
 
