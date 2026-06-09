@@ -37,10 +37,7 @@ contract BundleAnchorVerifier {
             abi.encodeWithSelector(IERC165.supportsInterface.selector, type(IDocumentBundleAnchor).interfaceId)
         );
         if (ok) {
-            require(
-                data.length == 32 && abi.decode(data, (bool)),
-                "BundleAnchorVerifier: unsupported registry"
-            );
+            require(data.length == 32 && abi.decode(data, (bool)), "BundleAnchorVerifier: unsupported registry");
         }
 
         _registry = IDocumentBundleAnchor(registry_);
@@ -66,18 +63,14 @@ contract BundleAnchorVerifier {
 
     /// @notice Returns true if bundleHash is the currently active bundle for (subjectId, role)
     ///         and has not been superseded.
-    function isBundleCurrent(bytes32 bundleHash, bytes32 subjectId, bytes32 role)
-        public view returns (bool)
-    {
+    function isBundleCurrent(bytes32 bundleHash, bytes32 subjectId, bytes32 role) public view returns (bool) {
         (bool current, bytes32 active,) = _activeRecord(subjectId, role);
         return current && active == bundleHash;
     }
 
     /// @notice Returns true only if ALL roles have an active bundle for subjectId.
     /// @dev Reverts for empty, duplicate, or more-than-256 role sets.
-    function hasActiveBundlesForAllRoles(bytes32 subjectId, bytes32[] calldata roles)
-        public view returns (bool)
-    {
+    function hasActiveBundlesForAllRoles(bytes32 subjectId, bytes32[] calldata roles) public view returns (bool) {
         _validateRoles(roles);
         for (uint256 i = 0; i < roles.length; i++) {
             if (!hasActiveBundle(subjectId, roles[i])) return false;
@@ -87,9 +80,7 @@ contract BundleAnchorVerifier {
 
     /// @notice Returns a bitmap indicating which roles have active bundles.
     ///         Bit i is set if roles[i] has an active bundle. Max 256 roles.
-    function activeBundleBitmap(bytes32 subjectId, bytes32[] calldata roles)
-        public view returns (uint256 bitmap)
-    {
+    function activeBundleBitmap(bytes32 subjectId, bytes32[] calldata roles) public view returns (uint256 bitmap) {
         _validateRoles(roles);
         for (uint256 i = 0; i < roles.length; i++) {
             if (hasActiveBundle(subjectId, roles[i])) {
@@ -101,12 +92,16 @@ contract BundleAnchorVerifier {
     /// @notice Retrieves the full AnchorRecord for the active bundle of (subjectId, role).
     ///         Reverts if no active bundle exists.
     function getActiveBundleRecord(bytes32 subjectId, bytes32 role)
-        public view returns (IDocumentBundleAnchor.AnchorRecord memory)
+        public
+        view
+        returns (IDocumentBundleAnchor.AnchorRecord memory)
     {
         bytes32 bundleHash = _registry.activeBundle(subjectId, role);
         if (bundleHash == bytes32(0)) revert NoBundleActive(subjectId, role);
         IDocumentBundleAnchor.AnchorRecord memory record;
-        try _registry.getAnchor(bundleHash, subjectId, role) returns (IDocumentBundleAnchor.AnchorRecord memory fetched) {
+        try _registry.getAnchor(bundleHash, subjectId, role) returns (
+            IDocumentBundleAnchor.AnchorRecord memory fetched
+        ) {
             record = fetched;
         } catch {
             revert BundleNotCurrent(bundleHash, subjectId, role);
@@ -147,11 +142,9 @@ contract BundleAnchorVerifier {
     }
 
     function _activeRecord(bytes32 subjectId, bytes32 role)
-        internal view returns (
-            bool current,
-            bytes32 active,
-            IDocumentBundleAnchor.AnchorRecord memory record
-        )
+        internal
+        view
+        returns (bool current, bytes32 active, IDocumentBundleAnchor.AnchorRecord memory record)
     {
         active = _registry.activeBundle(subjectId, role);
         if (active == bytes32(0)) return (false, active, record);
@@ -170,12 +163,8 @@ contract BundleAnchorVerifier {
         bytes32 subjectId,
         bytes32 role
     ) internal pure returns (bool) {
-        return record.bundleHash == bundleHash
-            && record.subjectId == subjectId
-            && record.role == role
-            && record.anchoredAt != 0
-            && record.documentCount > 0
-            && !record.superseded;
+        return record.bundleHash == bundleHash && record.subjectId == subjectId && record.role == role
+            && record.anchoredAt != 0 && record.documentCount > 0 && !record.superseded;
     }
 
     function _validateRoles(bytes32[] calldata roles) internal pure {

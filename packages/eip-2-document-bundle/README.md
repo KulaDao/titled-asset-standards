@@ -35,11 +35,12 @@ Use `BundleHashLib` to compute a canonical, order-independent bundle hash off-ch
 
 ```solidity
 DocumentEntry[] memory entries = ...; // populate fields
-entries = BundleHashLib.sortEntries(entries); // sort is required
-bytes32 bundleHash = BundleHashLib.computeBundleHash(entries);
+bytes32 bundleHash = BundleHashLib.computeCanonicalBundleHash(entries);
 ```
 
-`sortEntries` produces a **total order** over all 5 leaf fields (`role`, `filenameHash`, `contentHash`, `mimeTypeHash`, `normProfileId`) — any permutation of the same entry set yields the same hash.
+`computeCanonicalBundleHash` sorts entries before hashing. This is the recommended safe path for callers that have not already sorted their entries.
+
+`sortEntries` produces a **total order** over all 5 leaf fields (`role`, `filenameHash`, `contentHash`, `mimeTypeHash`, `normProfileId`) — any permutation of the same entry set yields the same hash. `computeBundleHash` is the low-level pre-sorted API: it now reverts if entries are not already in canonical order.
 
 ### `DocumentEntry` struct
 
@@ -65,6 +66,12 @@ anchorBundle() ──► ACTIVE ──► supersedeBundle() ──► SUPERSEDED
 - Superseded records are retrievable via `getAnchor(oldBundleHash, subjectId, role)` — history is permanent.
 - `activeBundle(subjectId, role)` always returns the current canonical hash for a namespace.
 
+## Subject and Metadata URI Policy
+
+`subjectId == bytes32(0)` is allowed as an explicit standalone namespace. Applications using standalone anchoring SHOULD derive nonzero subject identifiers from application context when multiple independent bundles may share the same role, because all zero-subject anchors for a role share one active slot.
+
+`metadataURI` may be empty. An empty URI means the anchor stores the bundle commitment and document count without an on-chain retrieval pointer. Deployments that require off-chain document availability SHOULD require a non-empty URI at the application layer.
+
 ## Access Control Roles
 
 | Role | Constant | Permissions |
@@ -83,7 +90,7 @@ IDocumentBundleAnchor.AnchorRecord memory rec = registry.getAnchor(active, subje
 require(!rec.superseded);
 
 // 3. Recompute the bundle hash off-chain and compare
-bytes32 recomputed = BundleHashLib.computeBundleHash(sortedEntries);
+bytes32 recomputed = BundleHashLib.computeCanonicalBundleHash(entries);
 require(recomputed == active);
 ```
 
@@ -93,7 +100,7 @@ require(recomputed == active);
 cd packages/eip-2-document-bundle
 
 forge build
-forge test                          # 28 unit tests
+forge test                          # unit tests
 
 # Invariant / fuzz
 forge test --match-contract DocumentBundleAnchorInvariantTest
@@ -103,6 +110,12 @@ medusa fuzz                         # requires medusa.json
 ## Known Pre-deployment Blocker
 
 `BundleHashLib.SCHEMA_V1 = keccak256("EIP-XXXX:BUNDLE:V1")` contains a placeholder EIP number. **This hash will change** when the EIP number is assigned — update `SCHEMA_V1` before any production deployment.
+
+Pre-submission checklist:
+
+- Replace every `EIP-XXXX` namespace constant with the assigned EIP number.
+- Regenerate and publish normative test vectors after the namespace update.
+- Confirm reference implementation repository links and fixture hashes before Review status.
 
 ## Companion EIPs
 

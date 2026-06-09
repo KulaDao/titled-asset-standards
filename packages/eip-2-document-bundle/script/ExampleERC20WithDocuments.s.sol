@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
 import {DocumentBundleAnchor} from "../src/reference/DocumentBundleAnchor.sol";
-import {BundleAnchorVerifier}  from "../src/reference/BundleAnchorVerifier.sol";
+import {BundleAnchorVerifier} from "../src/reference/BundleAnchorVerifier.sol";
 import {BundleHashLib} from "../src/libraries/BundleHashLib.sol";
 
 /// @notice Minimal EIP-1 registry interface — only what this script needs.
@@ -36,21 +36,18 @@ interface IAssetRegistry {
 ///      — the asset and its documents are linked by the shared subjectId
 contract ExampleERC20WithDocuments is Script {
     // EIP-1 role constants — same derivation as in AssetAnchorRegistry
-    bytes32 constant ROLE_LEGAL_BASIS  = keccak256("LEGAL_BASIS");
+    bytes32 constant ROLE_LEGAL_BASIS = keccak256("LEGAL_BASIS");
     bytes32 constant ROLE_DUE_DILIGENCE = keccak256("DUE_DILIGENCE");
 
     function run() external {
-        uint256 deployerKey    = vm.envUint("PRIVATE_KEY");
-        address deployer       = vm.addr(deployerKey);
-        address registry       = vm.envAddress("REGISTRY_ADDRESS");
-        bytes32 assetAnchorId  = vm.envBytes32("ASSET_ANCHOR_ID");
-        uint256 complianceKey  = vm.envOr("COMPLIANCE_PRIVATE_KEY", deployerKey);
-        address compliance     = vm.addr(complianceKey);
+        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(deployerKey);
+        address registry = vm.envAddress("REGISTRY_ADDRESS");
+        bytes32 assetAnchorId = vm.envBytes32("ASSET_ANCHOR_ID");
+        uint256 complianceKey = vm.envOr("COMPLIANCE_PRIVATE_KEY", deployerKey);
+        address compliance = vm.addr(complianceKey);
 
-        require(
-            IAssetRegistry(registry).isActive(assetAnchorId),
-            "ExampleERC20WithDocuments: EIP-1 anchor inactive"
-        );
+        require(IAssetRegistry(registry).isActive(assetAnchorId), "ExampleERC20WithDocuments: EIP-1 anchor inactive");
 
         // Demo bundle hashes still use placeholder document bytes, but the
         // manifest shape, fields, sorting, and schema prefix are EIP-2 canonical.
@@ -67,7 +64,7 @@ contract ExampleERC20WithDocuments is Script {
         dueDiligenceDocs[4] = "risk-assessment-v1.pdf";
 
         bytes32 legalBundle = _rawPdfBundle(ROLE_LEGAL_BASIS, legalDocs);
-        bytes32 ddBundle    = _rawPdfBundle(ROLE_DUE_DILIGENCE, dueDiligenceDocs);
+        bytes32 ddBundle = _rawPdfBundle(ROLE_DUE_DILIGENCE, dueDiligenceDocs);
 
         vm.startBroadcast(deployerKey);
 
@@ -88,9 +85,9 @@ contract ExampleERC20WithDocuments is Script {
         vm.startBroadcast(complianceKey);
         anchor.anchorBundle(
             legalBundle,
-            assetAnchorId,      // links this bundle to the EIP-1 asset
+            assetAnchorId, // links this bundle to the EIP-1 asset
             ROLE_LEGAL_BASIS,
-            3,                  // 3 documents: title deed, legal opinion, prospectus
+            3, // 3 documents: title deed, legal opinion, prospectus
             "ipfs://QmLegalBasisV1"
         );
         console.log("Legal basis bundle anchored:");
@@ -101,7 +98,7 @@ contract ExampleERC20WithDocuments is Script {
             ddBundle,
             assetAnchorId,
             ROLE_DUE_DILIGENCE,
-            5,                  // 5 documents: valuation, audit, KYC, AML, risk assessment
+            5, // 5 documents: valuation, audit, KYC, AML, risk assessment
             "ipfs://QmDueDiligenceV1"
         );
         console.log("Due diligence bundle anchored:");
@@ -136,13 +133,10 @@ contract ExampleERC20WithDocuments is Script {
         console.log("  verifier.requireActiveBundlesForAllRoles(assetAnchorId, roles)");
     }
 
-    function _rawPdfBundle(bytes32 role, string[] memory canonicalFilenames)
-        internal pure returns (bytes32)
-    {
+    function _rawPdfBundle(bytes32 role, string[] memory canonicalFilenames) internal pure returns (bytes32) {
         require(canonicalFilenames.length > 0, "ExampleERC20WithDocuments: empty bundle");
 
-        BundleHashLib.DocumentEntry[] memory entries =
-            new BundleHashLib.DocumentEntry[](canonicalFilenames.length);
+        BundleHashLib.DocumentEntry[] memory entries = new BundleHashLib.DocumentEntry[](canonicalFilenames.length);
 
         for (uint256 i = 0; i < canonicalFilenames.length; i++) {
             bytes memory nameBytes = bytes(canonicalFilenames[i]);
@@ -155,6 +149,6 @@ contract ExampleERC20WithDocuments is Script {
             });
         }
 
-        return BundleHashLib.computeBundleHash(BundleHashLib.sortEntries(entries));
+        return BundleHashLib.computeCanonicalBundleHash(entries);
     }
 }
