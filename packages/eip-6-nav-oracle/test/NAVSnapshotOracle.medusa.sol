@@ -13,6 +13,7 @@ contract NAVSnapshotOracleFuzzTest {
 
     constructor() {
         oracle = new NAVSnapshotOracle(address(this));
+        oracle.setNAVBasis(SUBJECT, USD, PER_SHARE);
         oracle.setStalenessConfig(SUBJECT, USD, 1 days, 30 days);
         oracle.setAggregationConfig(SUBJECT, USD, 1, 10_000);
     }
