@@ -15,6 +15,24 @@ contract MockBoundToken {
     }
 }
 
+contract MockMalformedAnchorRegistryReturn {
+    fallback(bytes calldata) external returns (bytes memory) {
+        return hex"1234";
+    }
+}
+
+contract MockTrailingAnchorRegistryReturn {
+    address private immutable _registry;
+
+    constructor(address registry) {
+        _registry = registry;
+    }
+
+    fallback(bytes calldata) external returns (bytes memory) {
+        return abi.encode(_registry, uint256(1));
+    }
+}
+
 contract AssetAnchorRegistryTest is Test {
     event AnchorRegistered(bytes32 indexed anchorId, bytes32 legalHash, bytes32 evidenceHash);
     event TokenBound(bytes32 indexed anchorId, address indexed token, bytes32 indexed bindingScope, uint256 tokenId);
@@ -160,7 +178,7 @@ contract AssetAnchorRegistryTest is Test {
             })
         );
         vm.prank(registrar);
-        vm.expectRevert("AssetAnchorRegistry: expiresAt not after attestationDate");
+        vm.expectRevert("AnchorMetadataLib: expiresAt not after attestationDate");
         registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, meta);
     }
 
@@ -223,6 +241,26 @@ contract AssetAnchorRegistryTest is Test {
         vm.prank(registrar);
         registry.bindToken(anchorId, compliantToken, SCOPE_CONTRACT, 0);
         assertEq(registry.getAnchor(anchorId).boundToken, compliantToken);
+    }
+
+    function test_bindToken_acceptsCompliantTokenWithTrailingReturnData() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        address compliantToken = address(new MockTrailingAnchorRegistryReturn(address(registry)));
+        vm.prank(registrar);
+        registry.bindToken(anchorId, compliantToken, SCOPE_CONTRACT, 0);
+        assertEq(registry.getAnchor(anchorId).boundToken, compliantToken);
+    }
+
+    function test_bindToken_revertsMalformedAnchorRegistryReturnData() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        address malformedToken = address(new MockMalformedAnchorRegistryReturn());
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: token registry mismatch");
+        registry.bindToken(anchorId, malformedToken, SCOPE_CONTRACT, 0);
     }
 
     function test_bindToken_emitsTokenBound() public {
@@ -290,6 +328,19 @@ contract AssetAnchorRegistryTest is Test {
         bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
 
         vm.prank(other);
+        vm.expectRevert("AssetAnchorRegistry: not authorized to bind");
+        registry.bindToken(anchorId, token, SCOPE_CONTRACT, 0);
+    }
+
+    function test_bindToken_revertsIfOriginalRegistrarRoleRevoked() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        bytes32 registrarRole = registry.REGISTRAR_ROLE();
+        vm.prank(admin);
+        registry.revokeRole(registrarRole, registrar);
+
+        vm.prank(registrar);
         vm.expectRevert("AssetAnchorRegistry: not authorized to bind");
         registry.bindToken(anchorId, token, SCOPE_CONTRACT, 0);
     }
@@ -443,6 +494,11 @@ contract AssetAnchorRegistryTest is Test {
         assertTrue(registry.isBound(anchorId), "should be bound");
     }
 
+    function test_isBound_revertsNotFound() public {
+        vm.expectRevert("AssetAnchorRegistry: anchor not found");
+        registry.isBound(keccak256("nonexistent"));
+    }
+
     // ─── isBound after deactivation ───────────────────────────────────
 
     function test_isBound_trueAfterDeactivation() public {
@@ -577,6 +633,20 @@ contract AssetAnchorRegistryTest is Test {
         registry.reattest(anchorId, 3_000_000, uint64(500_000));
     }
 
+    function test_reattest_revertsIfOriginalRegistrarRoleRevoked() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(1_000_000));
+
+        bytes32 registrarRole = registry.REGISTRAR_ROLE();
+        vm.prank(admin);
+        registry.revokeRole(registrarRole, registrar);
+
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: not authorized to reattest");
+        registry.reattest(anchorId, 3_000_000, uint64(500_000));
+    }
+
     function test_reattest_succeedsByAdmin() public {
         vm.warp(500_000);
         vm.prank(registrar);
@@ -586,6 +656,16 @@ contract AssetAnchorRegistryTest is Test {
         registry.reattest(anchorId, 3_000_000, uint64(500_000));
 
         assertEq(registry.getMetadata(anchorId).expiresAt, 3_000_000, "admin reattest failed");
+    }
+
+    function test_reattest_revertsNewExpiryBeforeCurrent() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(3_000_000));
+
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: new expiry before current");
+        registry.reattest(anchorId, 2_000_000, uint64(500_000));
     }
 
     function test_reattest_emitsAnchorReattested() public {
@@ -655,6 +735,11 @@ contract AssetAnchorRegistryTest is Test {
         registry.deactivateAnchor(anchorId, "retired");
 
         assertFalse(registry.isActive(anchorId), "should be inactive after manual deactivation");
+    }
+
+    function test_isActive_revertsNotFound() public {
+        vm.expectRevert("AssetAnchorRegistry: anchor not found");
+        registry.isActive(keccak256("nonexistent"));
     }
 
     function test_isActive_restoredAfterReattest() public {

@@ -19,7 +19,16 @@ median aggregation.
   must call `setNAVBasis()` before publication, and `publishNAV()` rejects
   submissions whose `navBasis` differs from the configured stream basis.
 - A provider can publish only one original snapshot per stream and valuation timestamp. Updates to that provider/timestamp must be linked as corrections.
+- `correctsIndex == NO_CORRECTION` means an original/non-correction snapshot.
+- `correctedByIndex == NO_CORRECTED_BY` (`0`) means "not corrected"; when corrected,
+  the target snapshot's `correctedByIndex` is set to the correction snapshot index.
+  Index `0` is safe as the corrected-by sentinel because a correction always has
+  an index greater than the snapshot it corrects.
 - Corrections are fork-free. A snapshot can be corrected once, only by the original provider, and the correction must match the provider's latest snapshot for that valuation timestamp, target valuation timestamp, and configured NAV basis.
+- Correction-of-correction chains are allowed. Use
+  `currentSnapshotIndex(subjectId, currency, snapshotIndex)` to resolve the
+  terminal snapshot in a chain and `isSnapshotCurrent(subjectId, currency,
+  snapshotIndex)` to check whether a snapshot has no successor correction.
 - `latestNAVStatus()` reverts until both heartbeat and max valuation age are configured for the stream.
 - Aggregation uses the latest valuation timestamp with quorum, uses the configured stream NAV basis, normalizes decimals to the highest submitted decimal precision, and returns the lower median for even provider counts.
 - `aggregatedNAV()` also reverts until heartbeat and max valuation age are configured, since it returns staleness flags.

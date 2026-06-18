@@ -14,8 +14,11 @@ evidence links, payload profiles, type indexing, and correction provenance.
 - Event indices are scoped per `subjectId`.
 - `recordEvent()` is restricted to `RECORDER_ROLE`.
 - Records are append-only. Existing fields are never mutated except `correctedByIndex`.
-- `correctedByIndex == 0` means "not corrected"; when corrected, the target event's `correctedByIndex`
-  is set to the correction event index.
+- `correctsIndex == NO_CORRECTION` means an original/non-correction event.
+- `correctedByIndex == NO_CORRECTED_BY` (`0`) means "not corrected"; when corrected,
+  the target event's `correctedByIndex` is set to the correction event index.
+  Index `0` is safe as the corrected-by sentinel because a correction always has
+  an index greater than the event it corrects.
 - Corrections are fork-free and must use `EVT_CORRECTION`.
 - A normal recorder can correct only events it originally recorded; an admin can correct any event once
   it also holds `RECORDER_ROLE` or grants that role to itself.
@@ -68,8 +71,9 @@ chains are linear.
 Use `currentEventIndex(subjectId, eventIndex)` to resolve the terminal event in
 a correction chain. Use `isEventCurrent(subjectId, eventIndex)` to check whether
 an event has not been corrected. `latestEventByType()` is only a type-index
-helper; it does not resolve correction chains and should not be treated as the
-current state for an earlier event.
+helper by recording order: it returns the highest event index for that type, not
+the event with the greatest `occurredAt`. It does not resolve correction chains
+and should not be treated as the current state for an earlier event.
 
 ## Zero-Value Policy
 

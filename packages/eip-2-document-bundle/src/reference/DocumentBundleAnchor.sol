@@ -29,6 +29,8 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         string calldata metadataURI
     ) external onlyRole(ANCHOR_ROLE) {
         require(bundleHash != bytes32(0), "DocumentBundleAnchor: zero bundleHash");
+        require(subjectId != bytes32(0), "DocumentBundleAnchor: zero subjectId");
+        require(role != bytes32(0), "DocumentBundleAnchor: zero role");
         require(documentCount > 0, "DocumentBundleAnchor: zero documentCount");
 
         bytes32 tripleKey = _tripleKey(bundleHash, subjectId, role);
@@ -51,6 +53,8 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         string calldata metadataURI
     ) external onlyRole(ANCHOR_ROLE) {
         require(newBundleHash != bytes32(0), "DocumentBundleAnchor: zero newBundleHash");
+        require(subjectId != bytes32(0), "DocumentBundleAnchor: zero subjectId");
+        require(role != bytes32(0), "DocumentBundleAnchor: zero role");
         require(documentCount > 0, "DocumentBundleAnchor: zero documentCount");
 
         bytes32 oldTripleKey = _tripleKey(oldBundleHash, subjectId, role);

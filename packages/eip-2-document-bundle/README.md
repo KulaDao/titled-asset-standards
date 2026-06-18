@@ -68,7 +68,11 @@ anchorBundle() ──► ACTIVE ──► supersedeBundle() ──► SUPERSEDED
 
 ## Subject and Metadata URI Policy
 
-`subjectId == bytes32(0)` is allowed as an explicit standalone namespace. Applications using standalone anchoring SHOULD derive nonzero subject identifiers from application context when multiple independent bundles may share the same role, because all zero-subject anchors for a role share one active slot.
+`subjectId == bytes32(0)` and `role == bytes32(0)` are invalid in the
+reference implementation. Applications that need standalone anchoring should
+derive a nonzero subject identifier from application context, such as
+`keccak256(abi.encodePacked("EIP-XXXX:DOCUMENT_SUBJECT", msg.sender, nonce))`,
+rather than sharing a zero namespace.
 
 `metadataURI` may be empty. An empty URI means the anchor stores the bundle commitment and document count without an on-chain retrieval pointer. Deployments that require off-chain document availability SHOULD require a non-empty URI at the application layer.
 

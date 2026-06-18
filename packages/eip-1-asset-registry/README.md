@@ -50,7 +50,7 @@ function reattest(bytes32 anchorId, uint64 newExpiresAt, uint64 newAttestationDa
 ```
 REGISTER ──► ACTIVE ──► EXPIRED (expiresAt reached)
                 │              │
-                │    reattest()│ (original registrar or admin only)
+                │    reattest()│ (active original registrar or admin only)
                 │              ▼
                 │          ACTIVE again
                 │
@@ -59,12 +59,20 @@ REGISTER ──► ACTIVE ──► EXPIRED (expiresAt reached)
 ```
 
 Expiry is inclusive in the reference implementation: an anchor remains active while `block.timestamp <= expiresAt` and expires when `block.timestamp > expiresAt`.
+Lifecycle getters such as `isActive()` and `isBound()` revert for nonexistent
+anchors instead of returning `false`, matching `getAnchor()` and `getMetadata()`.
 
 **Binding** creates a permanent, immutable link between an anchor and a `(token, bindingScope, tokenId)` tuple:
 - Only possible while the anchor is active and unexpired
-- Only the original registrar or `DEFAULT_ADMIN_ROLE` can bind
+- Only the original registrar while it still holds `REGISTRAR_ROLE`, or `DEFAULT_ADMIN_ROLE`, can bind
 - Each `(token, bindingScope, tokenId)` tuple can be bound to at most one anchor in a given registry
-- `isBound()` returns `true` even after the anchor is deactivated or expired
+- `isBound()` returns `true` even after the anchor is deactivated or expired and reverts for nonexistent anchors
+
+Re-attestation can extend or preserve an anchor's expiry, but the reference
+implementation rejects expiry reductions. If the original registrar's
+`REGISTRAR_ROLE` is revoked, that address can no longer bind or re-attest its
+previously registered anchors; an admin must perform any subsequent lifecycle
+operation.
 
 Binding scopes are explicit:
 
@@ -80,7 +88,7 @@ For whole-contract binding, use `BINDING_SCOPE_CONTRACT` with `tokenId = 0` as t
 | Role | Selector constant | Permissions |
 |------|-------------------|-------------|
 | `DEFAULT_ADMIN_ROLE` | `0x00` | Grant/revoke roles, deactivate anchors, bind any anchor, re-attest any anchor |
-| `REGISTRAR_ROLE` | `keccak256("REGISTRAR")` | Register anchors, bind own anchors, re-attest own anchors |
+| `REGISTRAR_ROLE` | `keccak256("REGISTRAR")` | Register anchors, bind own anchors while role is active, re-attest own anchors while role is active |
 
 ## Consumer Verification
 

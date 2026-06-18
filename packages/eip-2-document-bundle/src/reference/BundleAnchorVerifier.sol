@@ -36,9 +36,8 @@ contract BundleAnchorVerifier {
         (bool ok, bytes memory data) = registry_.staticcall(
             abi.encodeWithSelector(IERC165.supportsInterface.selector, type(IDocumentBundleAnchor).interfaceId)
         );
-        if (ok) {
-            require(data.length == 32 && abi.decode(data, (bool)), "BundleAnchorVerifier: unsupported registry");
-        }
+        require(ok, "BundleAnchorVerifier: registry ERC-165 check failed");
+        require(data.length >= 32 && abi.decode(data, (bool)), "BundleAnchorVerifier: unsupported registry");
 
         _registry = IDocumentBundleAnchor(registry_);
     }

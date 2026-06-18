@@ -22,6 +22,7 @@ interface IDocumentBundleAnchor {
         bytes32 indexed oldBundleHash, bytes32 indexed newBundleHash, bytes32 indexed subjectId, bytes32 role
     );
 
+    /// @dev Reference implementations MUST reject zero bundleHash, subjectId, role, and documentCount.
     function anchorBundle(
         bytes32 bundleHash,
         bytes32 subjectId,
@@ -30,6 +31,7 @@ interface IDocumentBundleAnchor {
         string calldata metadataURI
     ) external;
 
+    /// @dev Reference implementations MUST reject zero newBundleHash, subjectId, role, and documentCount.
     function supersedeBundle(
         bytes32 oldBundleHash,
         bytes32 newBundleHash,
