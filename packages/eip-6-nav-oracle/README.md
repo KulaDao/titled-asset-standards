@@ -15,10 +15,13 @@ median aggregation.
 
 - Snapshot indices are scoped per `(subjectId, currency)` stream.
 - `latestNAV()` returns the terminal snapshot with the most recent valuation timestamp, not a late correction for an older valuation period.
+- Each `(subjectId, currency)` stream has one configured NAV basis. `CONFIG_ROLE`
+  must call `setNAVBasis()` before publication, and `publishNAV()` rejects
+  submissions whose `navBasis` differs from the configured stream basis.
 - A provider can publish only one original snapshot per stream and valuation timestamp. Updates to that provider/timestamp must be linked as corrections.
-- Corrections are fork-free. A snapshot can be corrected once, only by the original provider, and the correction must match the provider's latest snapshot for that valuation timestamp, target valuation timestamp, and NAV basis.
+- Corrections are fork-free. A snapshot can be corrected once, only by the original provider, and the correction must match the provider's latest snapshot for that valuation timestamp, target valuation timestamp, and configured NAV basis.
 - `latestNAVStatus()` reverts until both heartbeat and max valuation age are configured for the stream.
-- Aggregation uses the latest valuation timestamp with quorum, rejects mixed NAV bases, normalizes decimals to the highest submitted decimal precision, and returns the lower median for even provider counts.
+- Aggregation uses the latest valuation timestamp with quorum, uses the configured stream NAV basis, normalizes decimals to the highest submitted decimal precision, and returns the lower median for even provider counts.
 - `aggregatedNAV()` also reverts until heartbeat and max valuation age are configured, since it returns staleness flags.
 - Deviation detection is emitted from the non-view `publishNAV()` path once quorum is reached.
 
@@ -92,7 +95,23 @@ The reference implementation is dependency-free and includes minimal role contro
 |------|-------------|
 | `DEFAULT_ADMIN_ROLE` | Grant and revoke roles |
 | `PROVIDER_ROLE` | Publish original NAV snapshots and corrections for its own snapshots |
-| `CONFIG_ROLE` | Set staleness and aggregation configuration |
+| `CONFIG_ROLE` | Set stream NAV basis, staleness configuration, and aggregation configuration |
+
+## Stream NAV Basis
+
+`navBasis` is stream-level configuration, not provider-selected data. Before
+any provider can publish NAV for a `(subjectId, currency)` stream, an authorized
+configurer must call:
+
+```solidity
+setNAVBasis(subjectId, currency, PER_SHARE);
+```
+
+The reference implementation rejects unknown bases, repeated configuration, and
+publication before basis configuration. It also rejects any provider submission
+whose `navBasis` does not match `streamNAVBasis(subjectId, currency)`. This
+prevents a single provider from submitting a mismatched basis at a quorum
+timestamp and bricking `aggregatedNAV()` for downstream consumers.
 
 ## Build & Test
 

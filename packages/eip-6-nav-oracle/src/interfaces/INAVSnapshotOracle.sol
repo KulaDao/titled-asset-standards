@@ -36,8 +36,12 @@ interface INAVSnapshotOracle {
         bytes32 indexed subjectId, bytes32 indexed currency, uint64 heartbeat, uint64 maxValuationAge
     );
 
+    event NAVBasisConfigured(bytes32 indexed subjectId, bytes32 indexed currency, bytes32 navBasis);
+
     /// @dev MUST reject methodologyHash == bytes32(0). methodologyURI MAY be empty
     ///      only if the implementation documents how verifiers retrieve the methodology.
+    ///      MUST reject if the stream NAV basis is unconfigured or if navBasis does
+    ///      not match the stream's configured NAV basis.
     function publishNAV(
         bytes32 subjectId,
         bytes32 currency,
@@ -50,7 +54,11 @@ interface INAVSnapshotOracle {
         uint256 correctsIndex
     ) external returns (uint256 snapshotIndex);
 
+    function setNAVBasis(bytes32 subjectId, bytes32 currency, bytes32 navBasis) external;
+
     function setStalenessConfig(bytes32 subjectId, bytes32 currency, uint64 heartbeat, uint64 maxValuationAge) external;
+
+    function streamNAVBasis(bytes32 subjectId, bytes32 currency) external view returns (bytes32 navBasis);
 
     function latestNAV(bytes32 subjectId, bytes32 currency)
         external
