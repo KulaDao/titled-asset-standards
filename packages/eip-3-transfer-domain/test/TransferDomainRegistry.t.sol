@@ -87,6 +87,20 @@ contract TransferDomainRegistryTest is Test {
         registry.setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, bytes32(0));
     }
 
+    function test_setRoute_revertsZeroRouteIdentifiers() public {
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero sourceDomain");
+        registry.setRoute(bytes32(0), DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
+
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero destinationDomain");
+        registry.setRoute(DOMAIN_MU, bytes32(0), ASSET_MINERAL, PERMISSION_EVIDENCE);
+
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero assetClass");
+        registry.setRoute(DOMAIN_MU, DOMAIN_ZM, bytes32(0), PERMISSION_EVIDENCE);
+    }
+
     function test_routesAreDirectional() public {
         _setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
 
@@ -163,6 +177,20 @@ contract TransferDomainRegistryTest is Test {
         vm.prank(registrar);
         vm.expectRevert("TransferDomainRegistry: zero revocationEvidenceHash");
         registry.revokeRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, bytes32(0));
+    }
+
+    function test_revokeRoute_revertsZeroRouteIdentifiers() public {
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero sourceDomain");
+        registry.revokeRoute(bytes32(0), DOMAIN_ZM, ASSET_MINERAL, REVOCATION_EVIDENCE);
+
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero destinationDomain");
+        registry.revokeRoute(DOMAIN_MU, bytes32(0), ASSET_MINERAL, REVOCATION_EVIDENCE);
+
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero assetClass");
+        registry.revokeRoute(DOMAIN_MU, DOMAIN_ZM, bytes32(0), REVOCATION_EVIDENCE);
     }
 
     function test_revokeRoute_doesNotRevertIfAlreadyRevoked() public {

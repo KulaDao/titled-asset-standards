@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 uint256 constant NO_CORRECTION = type(uint256).max;
+uint256 constant NO_CORRECTED_BY = 0;
 
 interface IComplianceEventLog {
     struct Party {
@@ -24,8 +25,8 @@ interface IComplianceEventLog {
         bytes32 operationRef;
         uint64 occurredAt;
         uint64 recordedAt;
-        uint256 correctsIndex;
-        uint256 correctedByIndex;
+        uint256 correctsIndex; // NO_CORRECTION means original/non-correction event.
+        uint256 correctedByIndex; // NO_CORRECTED_BY means this event has no successor correction.
     }
 
     event ComplianceEventRecorded(
@@ -76,5 +77,9 @@ interface IComplianceEventLog {
         view
         returns (uint256 eventIndex);
 
+    /// @notice Get the latest recorded event index for an event type.
+    /// @dev "Latest" means highest event index / recording order, not max occurredAt.
+    ///      Consumers needing occurrence-time recency MUST iterate eventByTypeAt()
+    ///      and compare occurredAt values.
     function latestEventByType(bytes32 subjectId, bytes32 eventType) external view returns (uint256 eventIndex);
 }

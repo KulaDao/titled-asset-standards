@@ -31,16 +31,21 @@ function activeBundle(bytes32 subjectId, bytes32 role)
 
 ## Bundle Hash Derivation
 
-Use `BundleHashLib` to compute a canonical, order-independent bundle hash off-chain or in a consuming contract:
+Use `BundleHashLib` to reproduce canonical, order-independent bundle hashes.
+The recommended production pattern is to normalize, sort, and hash document
+entries off-chain, then pass the resulting `bundleHash` to the anchor contract:
 
 ```solidity
 DocumentEntry[] memory entries = ...; // populate fields
 bytes32 bundleHash = BundleHashLib.computeCanonicalBundleHash(entries);
 ```
 
-`computeCanonicalBundleHash` sorts entries before hashing. This is the recommended safe path for callers that have not already sorted their entries.
+`computeCanonicalBundleHash` sorts entries before hashing. It is the safe
+convenience path for tests, tooling, and small on-chain bundles, but its
+`sortEntries` helper uses an O(n^2) bubble sort with struct copies and is not
+intended as a gas-efficient large-bundle sorting algorithm.
 
-`sortEntries` produces a **total order** over all 5 leaf fields (`role`, `filenameHash`, `contentHash`, `mimeTypeHash`, `normProfileId`) — any permutation of the same entry set yields the same hash. `computeBundleHash` is the low-level pre-sorted API: it now reverts if entries are not already in canonical order.
+`sortEntries` produces a **total order** over all 5 leaf fields (`role`, `filenameHash`, `contentHash`, `mimeTypeHash`, `normProfileId`) — any permutation of the same entry set yields the same hash. `computeBundleHash` is the low-level pre-sorted API: it reverts if entries are not already in canonical order. Downstream contracts that must verify large bundles on-chain SHOULD pass pre-sorted entries to `computeBundleHash()` or use a more efficient sorting/verification algorithm before hashing.
 
 ### `DocumentEntry` struct
 
@@ -68,7 +73,11 @@ anchorBundle() ──► ACTIVE ──► supersedeBundle() ──► SUPERSEDED
 
 ## Subject and Metadata URI Policy
 
-`subjectId == bytes32(0)` is allowed as an explicit standalone namespace. Applications using standalone anchoring SHOULD derive nonzero subject identifiers from application context when multiple independent bundles may share the same role, because all zero-subject anchors for a role share one active slot.
+`subjectId == bytes32(0)` and `role == bytes32(0)` are invalid in the
+reference implementation. Applications that need standalone anchoring should
+derive a nonzero subject identifier from application context, such as
+`keccak256(abi.encodePacked("EIP-XXXX:DOCUMENT_SUBJECT", msg.sender, nonce))`,
+rather than sharing a zero namespace.
 
 `metadataURI` may be empty. An empty URI means the anchor stores the bundle commitment and document count without an on-chain retrieval pointer. Deployments that require off-chain document availability SHOULD require a non-empty URI at the application layer.
 

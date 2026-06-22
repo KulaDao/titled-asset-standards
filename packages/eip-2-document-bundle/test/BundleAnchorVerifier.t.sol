@@ -55,6 +55,18 @@ contract MockBundleAnchorRegistry is IDocumentBundleAnchor, IERC165 {
     }
 }
 
+contract RevertingSupportsInterfaceRegistry {
+    function supportsInterface(bytes4) external pure returns (bool) {
+        revert("mock supportsInterface revert");
+    }
+}
+
+contract MalformedSupportsInterfaceRegistry {
+    fallback(bytes calldata) external returns (bytes memory) {
+        return hex"1234";
+    }
+}
+
 contract BundleAnchorVerifierTest is Test {
     DocumentBundleAnchor anchor;
     VerifierHarness verifier;
@@ -97,6 +109,18 @@ contract BundleAnchorVerifierTest is Test {
     function test_constructor_revertsUnsupportedRegistry() public {
         MockBundleAnchorRegistry mock = new MockBundleAnchorRegistry();
         mock.setSupportsDocumentBundleAnchor(false);
+        vm.expectRevert("BundleAnchorVerifier: unsupported registry");
+        new VerifierHarness(address(mock));
+    }
+
+    function test_constructor_revertsWhenRegistryERC165CheckReverts() public {
+        RevertingSupportsInterfaceRegistry mock = new RevertingSupportsInterfaceRegistry();
+        vm.expectRevert("BundleAnchorVerifier: registry ERC-165 check failed");
+        new VerifierHarness(address(mock));
+    }
+
+    function test_constructor_revertsMalformedERC165ReturnData() public {
+        MalformedSupportsInterfaceRegistry mock = new MalformedSupportsInterfaceRegistry();
         vm.expectRevert("BundleAnchorVerifier: unsupported registry");
         new VerifierHarness(address(mock));
     }

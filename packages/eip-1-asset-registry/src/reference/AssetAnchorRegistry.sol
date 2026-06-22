@@ -36,7 +36,8 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecy
         require(rec.active, "AssetAnchorRegistry: anchor inactive");
         require(block.timestamp <= _metadata[anchorId].expiresAt, "AssetAnchorRegistry: anchor expired");
         require(
-            _registeredBy[anchorId] == msg.sender || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
+            (hasRole(REGISTRAR_ROLE, msg.sender) && _registeredBy[anchorId] == msg.sender)
+                || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
             "AssetAnchorRegistry: not authorized to bind"
         );
         _requireTokenRegistryAgreement(token);
@@ -67,6 +68,7 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecy
     }
 
     function isBound(bytes32 anchorId) external view returns (bool) {
+        require(_records[anchorId].registeredAt != 0, "AssetAnchorRegistry: anchor not found");
         return _records[anchorId].boundToken != address(0);
     }
 
@@ -112,8 +114,12 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecy
     ///      registry. Plain ERC-20/721 tokens that don't implement the interface are allowed.
     function _requireTokenRegistryAgreement(address token) internal view {
         (bool ok, bytes memory data) = token.staticcall(abi.encodeWithSignature("anchorRegistry()"));
-        if (ok && data.length == 32) {
-            address declared = abi.decode(data, (address));
+        if (ok && data.length > 0) {
+            require(data.length >= 32, "AssetAnchorRegistry: token registry mismatch");
+            address declared;
+            assembly {
+                declared := mload(add(data, 32))
+            }
             require(declared == address(this), "AssetAnchorRegistry: token registry mismatch");
         }
     }
@@ -167,7 +173,8 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecy
         require(rec.registeredAt != 0, "AssetAnchorRegistry: anchor not found");
         require(rec.active, "AssetAnchorRegistry: manually deactivated");
         require(
-            _registeredBy[anchorId] == msg.sender || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
+            (hasRole(REGISTRAR_ROLE, msg.sender) && _registeredBy[anchorId] == msg.sender)
+                || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
             "AssetAnchorRegistry: not authorized to reattest"
         );
         require(newExpiresAt > block.timestamp, "AssetAnchorRegistry: expiresAt must be future");
@@ -176,6 +183,7 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecy
         require(newAttestationDate < newExpiresAt, "AssetAnchorRegistry: expiresAt not after attestationDate");
 
         AnchorMetadataLib.AnchorMetadata storage meta = _metadata[anchorId];
+        require(newExpiresAt >= meta.expiresAt, "AssetAnchorRegistry: new expiry before current");
         uint64 oldExpiresAt = meta.expiresAt;
         meta.expiresAt = newExpiresAt;
         meta.attestationDate = newAttestationDate;
@@ -199,6 +207,7 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecy
     ///         Manual deactivation takes precedence — reattest() reverts on a deactivated anchor.
     function isActive(bytes32 anchorId) external view returns (bool) {
         AnchorRecord storage rec = _records[anchorId];
+        require(rec.registeredAt != 0, "AssetAnchorRegistry: anchor not found");
         if (!rec.active) return false;
         return block.timestamp <= _metadata[anchorId].expiresAt;
     }

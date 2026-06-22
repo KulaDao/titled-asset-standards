@@ -310,6 +310,27 @@ contract NAVSnapshotOracleTest {
         _assertEq(nav, 110, "stream latest correction");
     }
 
+    function test_currentSnapshotIndexFollowsCorrectionChain() public {
+        uint256 original = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        uint256 correction = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, original);
+        uint256 terminal = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 120, 2, T0, METHOD_2, correction);
+
+        _assertEq(oracle.currentSnapshotIndex(SUBJECT, USD, original), terminal, "original resolves to terminal");
+        _assertEq(oracle.currentSnapshotIndex(SUBJECT, USD, correction), terminal, "correction resolves to terminal");
+        _assertEq(oracle.currentSnapshotIndex(SUBJECT, USD, terminal), terminal, "terminal resolves to self");
+        _assertFalse(oracle.isSnapshotCurrent(SUBJECT, USD, original), "original corrected");
+        _assertFalse(oracle.isSnapshotCurrent(SUBJECT, USD, correction), "middle correction corrected");
+        _assertTrue(oracle.isSnapshotCurrent(SUBJECT, USD, terminal), "terminal current");
+    }
+
+    function test_currentSnapshotHelpersRevertOutOfRange() public {
+        vm.expectRevert(bytes("NAVSnapshotOracle: snapshotIndex out of range"));
+        oracle.currentSnapshotIndex(SUBJECT, USD, 0);
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: snapshotIndex out of range"));
+        oracle.isSnapshotCurrent(SUBJECT, USD, 0);
+    }
+
     function test_correctionCannotForkOrCrossProvider() public {
         _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
         _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, 0);
