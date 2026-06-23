@@ -41,13 +41,18 @@ contract TransferDomainRegistry is ITransferDomainRegistry, AccessControl {
         bytes32 assetClass,
         bytes32 permissionEvidenceHash
     ) public virtual onlyRole(REGISTRAR_ROLE) {
+        _requireNonZeroRouteIdentifiers(sourceDomain, destinationDomain, assetClass);
         require(permissionEvidenceHash != bytes32(0), "TransferDomainRegistry: zero permissionEvidenceHash");
 
         bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
         uint64 effectiveAt = _now64();
 
-        _routes[key] =
-            Route({permitted: true, effectiveAt: effectiveAt, permissionEvidenceHash: permissionEvidenceHash});
+        _routes[key] = Route({
+            permitted: true,
+            effectiveAt: effectiveAt,
+            permissionEvidenceHash: permissionEvidenceHash,
+            revocationEvidenceHash: bytes32(0)
+        });
 
         emit RouteSet(sourceDomain, destinationDomain, assetClass, permissionEvidenceHash, effectiveAt);
     }
@@ -58,6 +63,7 @@ contract TransferDomainRegistry is ITransferDomainRegistry, AccessControl {
         bytes32 assetClass,
         bytes32 revocationEvidenceHash
     ) public virtual onlyRole(REGISTRAR_ROLE) {
+        _requireNonZeroRouteIdentifiers(sourceDomain, destinationDomain, assetClass);
         require(revocationEvidenceHash != bytes32(0), "TransferDomainRegistry: zero revocationEvidenceHash");
 
         bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
@@ -65,6 +71,7 @@ contract TransferDomainRegistry is ITransferDomainRegistry, AccessControl {
 
         _routes[key].permitted = false;
         _routes[key].effectiveAt = effectiveAt;
+        _routes[key].revocationEvidenceHash = revocationEvidenceHash;
 
         emit RouteRevoked(sourceDomain, destinationDomain, assetClass, revocationEvidenceHash, effectiveAt);
     }
@@ -113,6 +120,15 @@ contract TransferDomainRegistry is ITransferDomainRegistry, AccessControl {
         returns (bytes32)
     {
         return TransferRouteLib.routeKey(sourceDomain, destinationDomain, assetClass);
+    }
+
+    function _requireNonZeroRouteIdentifiers(bytes32 sourceDomain, bytes32 destinationDomain, bytes32 assetClass)
+        internal
+        pure
+    {
+        require(sourceDomain != bytes32(0), "TransferDomainRegistry: zero sourceDomain");
+        require(destinationDomain != bytes32(0), "TransferDomainRegistry: zero destinationDomain");
+        require(assetClass != bytes32(0), "TransferDomainRegistry: zero assetClass");
     }
 
     function _now64() internal view returns (uint64) {

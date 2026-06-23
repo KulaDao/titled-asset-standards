@@ -11,6 +11,7 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
     mapping(bytes32 => Revocation) internal _revocations;
 
     constructor(address admin, uint64 gracePeriod_) TransferDomainRegistry(admin) {
+        require(gracePeriod_ != 0, "GracefulTransferDomainRegistry: zero grace period");
         gracePeriod = gracePeriod_;
     }
 
@@ -28,6 +29,7 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
         bytes32 assetClass,
         bytes32 permissionEvidenceHash
     ) public override onlyRole(REGISTRAR_ROLE) {
+        _requireNonZeroRouteIdentifiers(sourceDomain, destinationDomain, assetClass);
         delete _revocations[_routeKey(sourceDomain, destinationDomain, assetClass)];
         super.setRoute(sourceDomain, destinationDomain, assetClass, permissionEvidenceHash);
     }
@@ -38,6 +40,7 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
         bytes32 assetClass,
         bytes32 revocationEvidenceHash
     ) public override onlyRole(REGISTRAR_ROLE) {
+        _requireNonZeroRouteIdentifiers(sourceDomain, destinationDomain, assetClass);
         delete _revocations[_routeKey(sourceDomain, destinationDomain, assetClass)];
         super.revokeRoute(sourceDomain, destinationDomain, assetClass, revocationEvidenceHash);
     }
@@ -48,6 +51,7 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
         bytes32 assetClass,
         bytes32 revocationEvidenceHash
     ) external onlyRole(REGISTRAR_ROLE) {
+        _requireNonZeroRouteIdentifiers(sourceDomain, destinationDomain, assetClass);
         require(revocationEvidenceHash != bytes32(0), "GracefulTransferDomainRegistry: zero revocationEvidenceHash");
 
         bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
@@ -80,6 +84,7 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
         bytes32 assetClass,
         bytes32 cancellationEvidenceHash
     ) external onlyRole(REGISTRAR_ROLE) {
+        _requireNonZeroRouteIdentifiers(sourceDomain, destinationDomain, assetClass);
         require(cancellationEvidenceHash != bytes32(0), "GracefulTransferDomainRegistry: zero cancellationEvidenceHash");
 
         bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
@@ -94,17 +99,18 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
     }
 
     function finalizeRevocation(bytes32 sourceDomain, bytes32 destinationDomain, bytes32 assetClass) external {
+        _requireNonZeroRouteIdentifiers(sourceDomain, destinationDomain, assetClass);
         bytes32 key = _routeKey(sourceDomain, destinationDomain, assetClass);
         Revocation storage revocation = _revocations[key];
 
-        require(revocation.pending || revocation.finalized, "GracefulTransferDomainRegistry: no revocation");
-        require(!revocation.finalized, "GracefulTransferDomainRegistry: already finalized");
+        require(revocation.pending, "GracefulTransferDomainRegistry: no revocation");
         require(block.timestamp >= revocation.effectiveAt, "GracefulTransferDomainRegistry: grace period active");
 
         revocation.pending = false;
         revocation.finalized = true;
         _routes[key].permitted = false;
         _routes[key].effectiveAt = revocation.effectiveAt;
+        _routes[key].revocationEvidenceHash = revocation.revocationEvidenceHash;
 
         emit RouteRevoked(
             sourceDomain, destinationDomain, assetClass, revocation.revocationEvidenceHash, revocation.effectiveAt
@@ -131,6 +137,7 @@ contract GracefulTransferDomainRegistry is TransferDomainRegistry, IGracefulRout
         if (revocation.pending && block.timestamp >= revocation.effectiveAt) {
             route.permitted = false;
             route.effectiveAt = revocation.effectiveAt;
+            route.revocationEvidenceHash = revocation.revocationEvidenceHash;
         }
     }
 }

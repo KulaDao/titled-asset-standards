@@ -25,6 +25,7 @@ library AnchorMetadataLib {
         require(m.jurisdiction != bytes32(0), "AnchorMetadataLib: missing jurisdiction");
         require(m.attestationDate != 0, "AnchorMetadataLib: missing attestationDate");
         require(m.expiresAt != 0, "AnchorMetadataLib: missing expiresAt");
+        require(m.attestationDate < m.expiresAt, "AnchorMetadataLib: expiresAt not after attestationDate");
         require(m.uri.length > 0, "AnchorMetadataLib: missing uri");
     }
 }

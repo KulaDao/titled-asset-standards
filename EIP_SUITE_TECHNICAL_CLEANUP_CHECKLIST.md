@@ -16,10 +16,10 @@ This checklist tracks the remaining implementation and documentation cleanup aft
 1. EIP-1 binding model fixes (complete)
 2. Cross-suite zero-value policy (complete)
 3. EIP-2 canonical hash hardening (complete)
-4. EIP-3 evidence semantics
-5. EIP-4 payload/evidence semantics
-6. EIP-5 attestation/methodology polish
-7. EIP-6 methodology/currency guidance
+4. EIP-3 evidence semantics (complete)
+5. EIP-4 payload/evidence semantics (complete)
+6. EIP-5 attestation/methodology polish (complete)
+7. EIP-6 methodology/currency guidance (complete)
 8. Root README and per-package limits pass
 9. Medusa non-triviality assertions
 10. Full verification run
@@ -242,7 +242,7 @@ Acceptance criteria:
 
 Package: `packages/eip-3-transfer-domain`
 
-Primary status: mostly resolved.
+Primary status: resolved.
 
 ### Evidence Hash Semantics
 
@@ -256,13 +256,20 @@ Acceptance criteria:
 
 ### Revocation Evidence Retrieval
 
-- [?] Decide whether immediate `revocationEvidenceHash` must be readable on-chain after revocation.
-- [ ] If yes, add it to `Route` or a separate revocation record.
-- [ ] If no, update docs to say immediate revocation evidence is event-only, while graceful revocation evidence is retrievable through `getRevocation`.
+- [x] Decide whether immediate `revocationEvidenceHash` must be readable on-chain after revocation.
+- [x] If yes, add it to `Route` or a separate revocation record.
+- [x] Not applicable: immediate revocation evidence is readable on-chain from `Route`.
 
 Acceptance criteria:
 
 - Docs no longer imply all revocation evidence is independently readable from route state unless it actually is.
+
+Implementation notes:
+
+- `Route` now includes `revocationEvidenceHash`.
+- Immediate revocation stores revocation evidence directly on the route.
+- Graceful revocation keeps pending evidence in `getRevocation()` and exposes it through `getRoute()` once the grace period has expired.
+- Re-enabling a route clears prior route-level revocation evidence.
 
 ### Revert Wording
 
@@ -279,7 +286,7 @@ Acceptance criteria:
 
 Package: `packages/eip-4-compliance-event`
 
-Primary status: partially resolved.
+Primary status: resolved.
 
 ### Evidence Hash Semantics
 
@@ -293,32 +300,49 @@ Acceptance criteria:
 
 ### Payload Profile Semantics
 
-- [ ] Define schemas for base payload profiles in README and/or constants docs.
-- [ ] State that unknown payload profiles MUST be treated as opaque bytes.
-- [ ] If the reference implementation does not validate payload/profile compatibility, document that validation is application-level.
+- [x] Define schemas for base payload profiles in README and/or constants docs.
+- [x] State that unknown payload profiles MUST be treated as opaque bytes.
+- [x] If the reference implementation does not validate payload/profile compatibility, document that validation is application-level.
 
 Acceptance criteria:
 
 - Consumers know how to decode standard payload profiles and how to handle unknown ones.
 
+Implementation notes:
+
+- README and `ComplianceConstants.sol` define base payload ABI encodings.
+- Unknown payload profile IDs are accepted and stored as opaque bytes.
+- The reference implementation validates only payload size, not profile compatibility.
+
 ### Event Type / Outcome Matrix
 
-- [?] Decide whether the reference implementation should validate event type / outcome combinations.
-- [ ] If yes, add validation and tests.
-- [ ] If no, document that combinations are not constrained by the reference implementation.
+- [x] Decide whether the reference implementation should validate event type / outcome combinations.
+- [x] Not applicable: the reference implementation intentionally does not validate event type / outcome combinations.
+- [x] If no, document that combinations are not constrained by the reference implementation.
 
 Acceptance criteria:
 
 - Reviewers do not mistake unconstrained `bytes32` fields for validated compliance semantics.
 
+Implementation notes:
+
+- Event type / outcome matrix validation is application-layer policy.
+- Tests assert that an unconstrained combination is accepted and stored.
+
 ### Correction Current-State Guidance
 
-- [ ] Add package README guidance for resolving corrected/current event state.
-- [ ] Consider adding a helper getter if current-state lookup is expected on-chain.
+- [x] Add package README guidance for resolving corrected/current event state.
+- [x] Consider adding a helper getter if current-state lookup is expected on-chain.
 
 Acceptance criteria:
 
 - Consumers know that `EVT_CORRECTION` indexing alone does not provide a current-state resolver.
+
+Implementation notes:
+
+- Added `currentEventIndex(subjectId, eventIndex)` to resolve terminal correction-chain state.
+- Added `isEventCurrent(subjectId, eventIndex)` to check whether an event has not been corrected.
+- README warns that `latestEventByType()` is type-indexing only, not current-state resolution.
 
 ---
 
@@ -326,7 +350,7 @@ Acceptance criteria:
 
 Package: `packages/eip-5-impact-snapshot`
 
-Primary status: core PR #15 fixes resolved, polish remains.
+Primary status: resolved.
 
 ### Attestation Evidence Semantics
 
@@ -340,33 +364,50 @@ Acceptance criteria:
 
 ### Methodology Supersession Discoverability
 
-- [ ] Add `newMethodologyURI` to `MethodologySuperseded`, or add a getter for pending methodology details.
-- [ ] Document how consumers discover pending methodology URI before activation.
-- [ ] Add tests.
+- [x] Add `newMethodologyURI` to `MethodologySuperseded`, or add a getter for pending methodology details.
+- [x] Document how consumers discover pending methodology URI before activation.
+- [x] Add tests.
 
 Acceptance criteria:
 
 - Methodology URI is discoverable for both active and pending methodologies.
 
+Implementation notes:
+
+- Added `pendingMethodology(subjectId, indicatorId)` to expose scheduled future methodology hash, URI, and effective ordinal.
+- `activeMethodology()` remains the source for currently effective methodology details.
+- Unit tests cover pending URI/hash visibility before activation and cleared pending state after activation.
+
 ### README Warnings
 
-- [ ] Add warnings for privacy, double-counting/overlapping claims, and methodology URI/document availability.
-- [ ] Clarify "independent attestor" language: same reporter address is blocked, but credential independence is application-level.
-- [ ] Document custom indicator and unit naming rules.
-- [ ] Define overlapping period semantics.
+- [x] Add warnings for privacy, double-counting/overlapping claims, and methodology URI/document availability.
+- [x] Clarify "independent attestor" language: same reporter address is blocked, but credential independence is application-level.
+- [x] Document custom indicator and unit naming rules.
+- [x] Define overlapping period semantics.
 
 Acceptance criteria:
 
 - README no longer overstates what attestation/indicator semantics prove.
 
+Implementation notes:
+
+- README now calls attestation role-gated rather than intrinsically independent.
+- README documents overlapping periods as allowed and exact duplicate originals as rejected.
+- README adds custom indicator, canonical unit, privacy, double-counting, and document availability guidance.
+
 ### Medusa Non-Triviality
 
-- [ ] Add harness counters or invariants proving successful snapshots, corrections, and attestations happen.
-- [ ] Avoid silent no-op fuzz paths where all actions revert and invariants pass trivially.
+- [x] Add harness counters or invariants proving successful snapshots, corrections, and attestations happen.
+- [x] Avoid silent no-op fuzz paths where all actions revert and invariants pass trivially.
 
 Acceptance criteria:
 
 - Fuzz success cannot be explained by swallowed reverts alone.
+
+Implementation notes:
+
+- Medusa harness seeds one original snapshot, one correction, and one attestation in the constructor.
+- Added success counters and `property_nonTrivialActionsSucceeded()` so all-revert fuzz paths cannot satisfy the suite silently.
 
 ---
 
@@ -374,7 +415,7 @@ Acceptance criteria:
 
 Package: `packages/eip-6-nav-oracle`
 
-Primary status: mostly resolved; strongest implementation of the later packages.
+Primary status: resolved.
 
 ### Methodology Validation
 
@@ -388,31 +429,48 @@ Acceptance criteria:
 
 ### ERC-4626 Integration Guidance
 
-- [ ] Add README warning that `latestNAVStatus()` may revert when unconfigured.
-- [ ] Recommend adapter/cached-value patterns for ERC-4626 `convertToAssets()` / `convertToShares()` if relevant.
+- [x] Add README warning that `latestNAVStatus()` may revert when unconfigured.
+- [x] Recommend adapter/cached-value patterns for ERC-4626 `convertToAssets()` / `convertToShares()` if relevant.
 
 Acceptance criteria:
 
 - Vault integrators do not accidentally violate ERC-4626 expectations with a reverting oracle call.
 
+Implementation notes:
+
+- README warns that `latestNAVStatus()` and `aggregatedNAV()` revert until staleness config is set.
+- README recommends adapters, cached accepted NAV values, and state-changing pricing paths instead of direct unconfigured oracle calls from ERC-4626 conversion functions.
+
 ### Methodology Hash Derivation
 
-- [ ] Document whether `methodologyHash` is raw bytes, document bundle hash, or implementation-defined.
-- [ ] If EIP-2 document bundles are recommended, add example derivation.
+- [x] Document whether `methodologyHash` is raw bytes, document bundle hash, or implementation-defined.
+- [x] If EIP-2 document bundles are recommended, add example derivation.
 
 Acceptance criteria:
 
 - Consumers can reproduce or verify methodology hashes.
 
+Implementation notes:
+
+- README documents the reference implementation as storage-only for methodology fields.
+- Recommended derivations are `keccak256(methodologyDocumentBytes)` or an EIP-2 canonical document bundle hash.
+- README documents what `methodologyURI` should resolve to for each derivation path.
+
 ### Currency Encoding
 
-- [ ] Add custom/token currency derivation guidance.
-- [ ] Example: `keccak256(abi.encodePacked("EIP-XXXX:CURRENCY:TOKEN", chainId, tokenAddress))`.
-- [ ] Add tests or constants if needed.
+- [x] Add custom/token currency derivation guidance.
+- [x] Example: `keccak256(abi.encodePacked("EIP-XXXX:CURRENCY:TOKEN", chainId, tokenAddress))`.
+- [x] Add tests or constants if needed.
 
 Acceptance criteria:
 
 - Non-fiat NAV denominations are supported without ad hoc identifiers.
+
+Implementation notes:
+
+- Added `deriveTokenCurrency(chainId, tokenAddress)` to `NAVConstants.sol`.
+- Added a unit test for the exact token currency domain string.
+- README documents fiat, token, and other custom denomination conventions.
 
 ---
 

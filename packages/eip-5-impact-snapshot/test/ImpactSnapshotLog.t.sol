@@ -615,16 +615,35 @@ contract ImpactSnapshotLogTest is Test {
         vm.prank(reporter);
         isl.supersedeMethodology(SUBJECT_A, CARBON_OFFSET, METHOD_1, METHOD_2, "ipfs://v2", 3);
 
+        (bytes32 pendingHash, string memory pendingUri, uint256 effectiveFromOrdinal, bool pending) =
+            isl.pendingMethodology(SUBJECT_A, CARBON_OFFSET);
+        assertTrue(pending, "future supersession must be discoverable as pending");
+        assertEq(pendingHash, METHOD_2, "pending methodology hash mismatch");
+        assertEq(pendingUri, "ipfs://v2", "pending methodology URI mismatch");
+        assertEq(effectiveFromOrdinal, 3, "pending methodology ordinal mismatch");
+
         (bytes32 hash, string memory uri) = isl.activeMethodology(SUBJECT_A, CARBON_OFFSET);
         assertEq(hash, METHOD_1, "future supersession must not activate immediately");
         assertEq(uri, "ipfs://v1", "active URI must remain v1 before scheduled ordinal");
 
         _record(SUBJECT_A, CARBON_OFFSET, T1, T2, NO_CORRECTION); // count = 2
+        (pendingHash, pendingUri, effectiveFromOrdinal, pending) = isl.pendingMethodology(SUBJECT_A, CARBON_OFFSET);
+        assertTrue(pending, "future supersession must remain pending before ordinal");
+        assertEq(pendingHash, METHOD_2, "pending methodology hash must remain discoverable");
+        assertEq(pendingUri, "ipfs://v2", "pending methodology URI must remain discoverable");
+        assertEq(effectiveFromOrdinal, 3, "pending methodology ordinal must remain stable");
+
         (hash, uri) = isl.activeMethodology(SUBJECT_A, CARBON_OFFSET);
         assertEq(hash, METHOD_1, "future supersession must remain pending before ordinal");
         assertEq(uri, "ipfs://v1", "active URI must still be v1 before scheduled ordinal");
 
         _record(SUBJECT_A, CARBON_OFFSET, T2, T2 + 1, NO_CORRECTION); // count = 3
+        (pendingHash, pendingUri, effectiveFromOrdinal, pending) = isl.pendingMethodology(SUBJECT_A, CARBON_OFFSET);
+        assertFalse(pending, "pending supersession must clear once ordinal is reached");
+        assertEq(pendingHash, bytes32(0), "cleared pending methodology hash must be zero");
+        assertEq(pendingUri, "", "cleared pending methodology URI must be empty");
+        assertEq(effectiveFromOrdinal, 0, "cleared pending methodology ordinal must be zero");
+
         (hash, uri) = isl.activeMethodology(SUBJECT_A, CARBON_OFFSET);
         assertEq(hash, METHOD_2, "future supersession must become active when ordinal is reached");
         assertEq(uri, "ipfs://v2", "active URI must become v2 when ordinal is reached");

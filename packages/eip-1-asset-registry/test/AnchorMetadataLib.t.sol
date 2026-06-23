@@ -76,6 +76,13 @@ contract AnchorMetadataLibTest is Test {
         harness.validate(m);
     }
 
+    function test_validate_revertsExpiresAtNotAfterAttestationDate() public {
+        AnchorMetadataLib.AnchorMetadata memory m = _validMeta();
+        m.expiresAt = m.attestationDate;
+        vm.expectRevert("AnchorMetadataLib: expiresAt not after attestationDate");
+        harness.validate(m);
+    }
+
     function test_validate_revertsEmptyUri() public {
         AnchorMetadataLib.AnchorMetadata memory m = _validMeta();
         m.uri = bytes("");

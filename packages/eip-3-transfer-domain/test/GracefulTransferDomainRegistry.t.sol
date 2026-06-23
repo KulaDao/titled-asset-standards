@@ -69,6 +69,11 @@ contract GracefulTransferDomainRegistryTest is Test {
         assertEq(registry.gracePeriod(), GRACE_PERIOD);
     }
 
+    function test_constructor_revertsZeroGracePeriod() public {
+        vm.expectRevert("GracefulTransferDomainRegistry: zero grace period");
+        new GracefulTransferDomainRegistry(admin, 0);
+    }
+
     function test_supportsBaseAndGracefulInterfaces() public {
         assertTrue(registry.supportsInterface(type(ITransferDomainRegistry).interfaceId));
         assertTrue(registry.supportsInterface(type(IGracefulRouteRevocation).interfaceId));
@@ -115,6 +120,20 @@ contract GracefulTransferDomainRegistryTest is Test {
         registry.initiateRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, bytes32(0));
     }
 
+    function test_initiateRevocation_revertsZeroRouteIdentifiers() public {
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero sourceDomain");
+        registry.initiateRevocation(bytes32(0), DOMAIN_ZM, ASSET_MINERAL, REVOCATION_EVIDENCE);
+
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero destinationDomain");
+        registry.initiateRevocation(DOMAIN_MU, bytes32(0), ASSET_MINERAL, REVOCATION_EVIDENCE);
+
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero assetClass");
+        registry.initiateRevocation(DOMAIN_MU, DOMAIN_ZM, bytes32(0), REVOCATION_EVIDENCE);
+    }
+
     function test_initiateRevocation_revertsUnauthorized() public {
         _setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
 
@@ -155,12 +174,18 @@ contract GracefulTransferDomainRegistryTest is Test {
         IGracefulRouteRevocation.Revocation memory revocation =
             registry.getRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
 
+        vm.warp(revocation.effectiveAt - 1);
+        ITransferDomainRegistry.Route memory pendingRoute = registry.getRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+        assertTrue(pendingRoute.permitted);
+        assertEq(pendingRoute.revocationEvidenceHash, bytes32(0));
+
         vm.warp(revocation.effectiveAt);
         ITransferDomainRegistry.Route memory route = registry.getRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
 
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, revocation.effectiveAt);
         assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE);
+        assertEq(route.revocationEvidenceHash, REVOCATION_EVIDENCE);
     }
 
     function test_finalizeRevocation_afterGracePeriodEmitsOnceAndStoresFinalizedState() public {
@@ -187,9 +212,10 @@ contract GracefulTransferDomainRegistryTest is Test {
         assertTrue(afterFinalize.finalized);
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, beforeFinalize.effectiveAt);
+        assertEq(route.revocationEvidenceHash, REVOCATION_EVIDENCE);
 
         vm.prank(registrar);
-        vm.expectRevert("GracefulTransferDomainRegistry: already finalized");
+        vm.expectRevert("GracefulTransferDomainRegistry: no revocation");
         registry.finalizeRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
     }
 
@@ -213,6 +239,7 @@ contract GracefulTransferDomainRegistryTest is Test {
         assertTrue(afterFinalize.finalized);
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, beforeFinalize.effectiveAt);
+        assertEq(route.revocationEvidenceHash, REVOCATION_EVIDENCE);
     }
 
     function test_finalizeRevocation_revertsBeforeGracePeriodExpires() public {
@@ -228,6 +255,11 @@ contract GracefulTransferDomainRegistryTest is Test {
         vm.prank(registrar);
         vm.expectRevert("GracefulTransferDomainRegistry: no revocation");
         registry.finalizeRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+    }
+
+    function test_finalizeRevocation_revertsZeroRouteIdentifiers() public {
+        vm.expectRevert("TransferDomainRegistry: zero sourceDomain");
+        registry.finalizeRevocation(bytes32(0), DOMAIN_ZM, ASSET_MINERAL);
     }
 
     function test_cancelRevocation_beforeExpiryClearsStateAndKeepsRoutePermitted() public {
@@ -295,8 +327,10 @@ contract GracefulTransferDomainRegistryTest is Test {
 
         IGracefulRouteRevocation.Revocation memory revocation =
             registry.getRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+        ITransferDomainRegistry.Route memory route = registry.getRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
 
         assertFalse(registry.isRoutePermitted(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL));
+        assertEq(route.revocationEvidenceHash, REVOCATION_EVIDENCE);
         assertFalse(revocation.pending);
         assertFalse(revocation.finalized);
     }
@@ -323,6 +357,7 @@ contract GracefulTransferDomainRegistryTest is Test {
         assertTrue(route.permitted);
         assertEq(route.effectiveAt, expectedEffectiveAt);
         assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE_2);
+        assertEq(route.revocationEvidenceHash, bytes32(0));
         assertEq(reset.initiatedAt, 0);
         assertEq(reset.effectiveAt, 0);
         assertEq(reset.revocationEvidenceHash, bytes32(0));
@@ -352,6 +387,7 @@ contract GracefulTransferDomainRegistryTest is Test {
 
         assertTrue(route.permitted);
         assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE_2);
+        assertEq(route.revocationEvidenceHash, bytes32(0));
         assertFalse(reset.pending);
         assertFalse(reset.finalized);
     }
@@ -381,26 +417,6 @@ contract GracefulTransferDomainRegistryTest is Test {
         bool[] memory permitted = registry.isRoutePermittedBatch(sources, destinations, assets);
         assertFalse(permitted[0]);
         assertTrue(permitted[1]);
-    }
-
-    function test_zeroGracePeriodRevocationIsImmediatelyEffective() public {
-        GracefulTransferDomainRegistry zeroGrace = new GracefulTransferDomainRegistry(admin, 0);
-
-        bytes32 registrarRole = zeroGrace.REGISTRAR_ROLE();
-        vm.prank(admin);
-        zeroGrace.grantRole(registrarRole, registrar);
-
-        vm.prank(registrar);
-        zeroGrace.setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
-
-        vm.prank(registrar);
-        zeroGrace.initiateRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, REVOCATION_EVIDENCE);
-
-        assertFalse(zeroGrace.isRoutePermitted(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL));
-
-        vm.prank(registrar);
-        vm.expectRevert("GracefulTransferDomainRegistry: grace period expired");
-        zeroGrace.cancelRevocation(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, CANCELLATION_EVIDENCE);
     }
 
     function test_gracefulRevocationIsRouteScoped() public {

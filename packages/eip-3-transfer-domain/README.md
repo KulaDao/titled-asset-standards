@@ -72,6 +72,25 @@ evidence, graceful revocation evidence, and graceful revocation cancellation
 evidence. Empty or unavailable evidence must be represented off-chain in the
 evidence document itself, not by using a zero hash on-chain.
 
+## Evidence Retrieval
+
+`getRoute()` exposes both route-level evidence fields:
+
+- `permissionEvidenceHash` records the evidence supplied when the route was
+  most recently enabled.
+- `revocationEvidenceHash` records the evidence supplied when the route was
+  actually revoked. It is `bytes32(0)` while a route is active and not yet
+  revoked.
+
+For immediate revocation through `revokeRoute()`, `revocationEvidenceHash` is
+stored directly on the route. For graceful revocation, pending evidence is
+readable through `getRevocation()` during the grace period. Once the grace
+period has expired, `getRoute()` reflects the lazy revocation state and returns
+the pending revocation evidence as route-level revocation evidence even before
+`finalizeRevocation()` is called. Finalization persists the same evidence on the
+stored route record. Re-enabling a route through `setRoute()` clears prior
+route-level revocation evidence and records new permission evidence.
+
 ## Analysis
 
 ```sh

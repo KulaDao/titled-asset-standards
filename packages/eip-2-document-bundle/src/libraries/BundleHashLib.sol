@@ -24,7 +24,9 @@ library BundleHashLib {
     bytes32 internal constant SUPPORTING = keccak256("SUPPORTING");
 
     /// @notice Computes the canonical bundle hash by sorting entries before hashing.
-    /// @dev Sorts entries in-place. The caller's memory array is modified.
+    /// @dev Sorts entries in-place using an O(n^2) convenience sort. The caller's memory array is modified.
+    ///      Production systems SHOULD compute canonical bundle hashes off-chain and pass pre-sorted entries
+    ///      to computeBundleHash() if on-chain verification is required for large bundles.
     function computeCanonicalBundleHash(DocumentEntry[] memory entries) internal pure returns (bytes32) {
         return _computeBundleHashSorted(sortEntries(entries));
     }
@@ -55,6 +57,8 @@ library BundleHashLib {
     }
 
     // Sorts entries in-place by role, filenameHash, contentHash, mimeTypeHash, and normProfileId.
+    // This O(n^2) bubble sort is intended for small arrays and reference use; large bundles should be
+    // sorted off-chain or by a more gas-efficient on-chain algorithm.
     // Returns the same array reference — the input is also modified.
     function sortEntries(DocumentEntry[] memory entries) internal pure returns (DocumentEntry[] memory) {
         uint256 n = entries.length;

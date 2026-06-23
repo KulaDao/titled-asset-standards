@@ -66,6 +66,7 @@ interface IAssetAnchorRegistry {
     /// @dev isBound() returns true whenever boundToken is non-zero, regardless of the active
     ///      field. A deactivated anchor is still bound. Consumers checking operational status
     ///      SHOULD call isAnchorActive() on the token contract, not isBound() on the registry.
+    ///      Reverts if anchorId does not exist in this registry.
     function isBound(bytes32 anchorId) external view returns (bool);
 }
 
@@ -82,6 +83,7 @@ interface IAssetAnchorRegistryLifecycle {
     /// @dev This reference lifecycle treats expiresAt as inclusive: an anchor is
     ///      active while block.timestamp <= expiresAt and expired when
     ///      block.timestamp > expiresAt.
+    ///      Reverts if anchorId does not exist in this registry.
     function isActive(bytes32 anchorId) external view returns (bool);
 
     /// @notice Permanently deactivates an anchor.
@@ -89,6 +91,8 @@ interface IAssetAnchorRegistryLifecycle {
     function deactivateAnchor(bytes32 anchorId, string calldata reason) external;
 
     /// @notice Updates the attestation date and expiry for an active anchor.
-    /// @dev Reverts for manually deactivated anchors.
+    /// @dev Reverts for manually deactivated anchors. Reference implementations
+    ///      SHOULD require the caller to still hold registrar authority for own-anchor
+    ///      re-attestation and SHOULD reject expiry reductions.
     function reattest(bytes32 anchorId, uint64 newExpiresAt, uint64 newAttestationDate) external;
 }

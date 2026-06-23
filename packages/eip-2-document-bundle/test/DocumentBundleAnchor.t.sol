@@ -212,6 +212,18 @@ contract DocumentBundleAnchorTest is Test {
         anchor.anchorBundle(bytes32(0), SUBJECT_A, ROLE_1, 1, "");
     }
 
+    function test_anchorBundle_revertsZeroSubjectId() public {
+        vm.prank(anchorUser);
+        vm.expectRevert("DocumentBundleAnchor: zero subjectId");
+        anchor.anchorBundle(BUNDLE_1, bytes32(0), ROLE_1, 1, "");
+    }
+
+    function test_anchorBundle_revertsZeroRole() public {
+        vm.prank(anchorUser);
+        vm.expectRevert("DocumentBundleAnchor: zero role");
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, bytes32(0), 1, "");
+    }
+
     function test_anchorBundle_revertsZeroDocumentCount() public {
         vm.prank(anchorUser);
         vm.expectRevert("DocumentBundleAnchor: zero documentCount");
@@ -225,6 +237,18 @@ contract DocumentBundleAnchorTest is Test {
         vm.prank(anchorUser);
         vm.expectRevert("DocumentBundleAnchor: zero newBundleHash");
         anchor.supersedeBundle(BUNDLE_1, bytes32(0), SUBJECT_A, ROLE_1, 1, "");
+    }
+
+    function test_supersedeBundle_revertsZeroSubjectId() public {
+        vm.prank(anchorUser);
+        vm.expectRevert("DocumentBundleAnchor: zero subjectId");
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, bytes32(0), ROLE_1, 1, "");
+    }
+
+    function test_supersedeBundle_revertsZeroRole() public {
+        vm.prank(anchorUser);
+        vm.expectRevert("DocumentBundleAnchor: zero role");
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, bytes32(0), 1, "");
     }
 
     function test_supersedeBundle_revertsZeroDocumentCount() public {
@@ -387,10 +411,10 @@ contract DocumentBundleAnchorTest is Test {
         assertEq(r3.supersededBy, bytes32(0));
     }
 
-    function test_anchorBundle_allowsZeroSubjectIdAsStandaloneNamespace() public {
+    function test_anchorBundle_revertsZeroSubjectIdAsStandaloneNamespace() public {
         vm.prank(anchorUser);
+        vm.expectRevert("DocumentBundleAnchor: zero subjectId");
         anchor.anchorBundle(BUNDLE_1, bytes32(0), ROLE_1, 1, "ipfs://");
-        assertTrue(anchor.isAnchored(BUNDLE_1, bytes32(0), ROLE_1));
     }
 
     function test_anchorBundle_allowsEmptyMetadataURI() public {

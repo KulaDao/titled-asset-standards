@@ -6,6 +6,7 @@ interface ITransferDomainRegistry {
         bool permitted;
         uint64 effectiveAt;
         bytes32 permissionEvidenceHash;
+        bytes32 revocationEvidenceHash;
     }
 
     event RouteSet(
@@ -33,6 +34,7 @@ interface ITransferDomainRegistry {
         returns (bool);
 
     /// @notice Retrieve the full route state.
+    /// @dev revocationEvidenceHash is bytes32(0) until the route has been revoked.
     function getRoute(bytes32 sourceDomain, bytes32 destinationDomain, bytes32 assetClass)
         external
         view
@@ -40,6 +42,7 @@ interface ITransferDomainRegistry {
 
     /// @notice Register a route as permitted.
     /// @dev MUST emit RouteSet. Only enables routes; use revokeRoute() to disable.
+    ///      MUST reject sourceDomain, destinationDomain, and assetClass == bytes32(0).
     ///      MUST reject permissionEvidenceHash == bytes32(0).
     function setRoute(
         bytes32 sourceDomain,
@@ -51,6 +54,7 @@ interface ITransferDomainRegistry {
     /// @notice Revoke a route immediately.
     /// @dev MUST emit RouteRevoked. MUST NOT revert if the route does not exist
     ///      or is already revoked for an authorized caller with nonzero evidence.
+    ///      MUST reject sourceDomain, destinationDomain, and assetClass == bytes32(0).
     ///      MUST reject revocationEvidenceHash == bytes32(0).
     function revokeRoute(
         bytes32 sourceDomain,

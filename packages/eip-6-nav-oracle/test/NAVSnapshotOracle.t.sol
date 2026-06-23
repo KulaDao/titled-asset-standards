@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {INAVSnapshotOracle, NO_CORRECTION} from "../src/interfaces/INAVSnapshotOracle.sol";
 import {INAVAggregation} from "../src/interfaces/INAVAggregation.sol";
 import {NAVSnapshotOracle} from "../src/reference/NAVSnapshotOracle.sol";
-import {EUR, PER_SHARE, PER_UNIT, TOTAL, USD} from "../src/libraries/NAVConstants.sol";
+import {EUR, PER_SHARE, PER_UNIT, TOTAL, USD, deriveTokenCurrency} from "../src/libraries/NAVConstants.sol";
 
 interface Vm {
     function expectRevert(bytes calldata revertData) external;
@@ -39,6 +39,8 @@ contract NAVSnapshotOracleTest {
         uint256 correctsIndex
     );
 
+    event NAVBasisConfigured(bytes32 indexed subjectId, bytes32 indexed currency, bytes32 navBasis);
+
     event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
     event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
 
@@ -69,6 +71,10 @@ contract NAVSnapshotOracleTest {
         oracle.grantRole(providerRole, PROVIDER_B);
         vm.prank(ADMIN);
         oracle.grantRole(providerRole, PROVIDER_C);
+
+        _configureBasis(SUBJECT, USD, PER_SHARE);
+        _configureBasis(SUBJECT, EUR, PER_SHARE);
+        _configureBasis(SUBJECT_2, USD, PER_SHARE);
     }
 
     function test_constructorRejectsZeroAdmin() public {
@@ -98,6 +104,33 @@ contract NAVSnapshotOracleTest {
         vm.prank(ADMIN);
         vm.expectRevert(bytes("NAVSnapshotOracle: zero maxValuationAge"));
         oracle.setStalenessConfig(SUBJECT, USD, 1 days, 0);
+    }
+
+    function test_setNAVBasisStoresConfiguredBasis() public {
+        vm.expectEmit(true, true, false, true);
+        emit NAVBasisConfigured(SUBJECT_2, EUR, PER_UNIT);
+        _configureBasis(SUBJECT_2, EUR, PER_UNIT);
+
+        _assertEq(oracle.streamNAVBasis(SUBJECT_2, EUR), PER_UNIT, "stream nav basis");
+    }
+
+    function test_setNAVBasisRejectsInvalidOrRepeatedConfig() public {
+        vm.prank(ADMIN);
+        vm.expectRevert(bytes("NAVSnapshotOracle: unknown navBasis"));
+        oracle.setNAVBasis(SUBJECT_2, EUR, keccak256("BAD"));
+
+        _configureBasis(SUBJECT_2, EUR, PER_UNIT);
+
+        vm.prank(ADMIN);
+        vm.expectRevert(bytes("NAVSnapshotOracle: navBasis already configured"));
+        oracle.setNAVBasis(SUBJECT_2, EUR, TOTAL);
+    }
+
+    function test_publishNAVRequiresConfiguredBasis() public {
+        vm.warp(T0);
+        vm.prank(PROVIDER_A);
+        vm.expectRevert(bytes("NAVSnapshotOracle: navBasis unconfigured"));
+        oracle.publishNAV(SUBJECT_2, EUR, PER_SHARE, 100, 2, T0, METHOD_1, "", NO_CORRECTION);
     }
 
     function test_grantRoleEmitsAndAllowsProvider() public {
@@ -277,6 +310,27 @@ contract NAVSnapshotOracleTest {
         _assertEq(nav, 110, "stream latest correction");
     }
 
+    function test_currentSnapshotIndexFollowsCorrectionChain() public {
+        uint256 original = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        uint256 correction = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, original);
+        uint256 terminal = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 120, 2, T0, METHOD_2, correction);
+
+        _assertEq(oracle.currentSnapshotIndex(SUBJECT, USD, original), terminal, "original resolves to terminal");
+        _assertEq(oracle.currentSnapshotIndex(SUBJECT, USD, correction), terminal, "correction resolves to terminal");
+        _assertEq(oracle.currentSnapshotIndex(SUBJECT, USD, terminal), terminal, "terminal resolves to self");
+        _assertFalse(oracle.isSnapshotCurrent(SUBJECT, USD, original), "original corrected");
+        _assertFalse(oracle.isSnapshotCurrent(SUBJECT, USD, correction), "middle correction corrected");
+        _assertTrue(oracle.isSnapshotCurrent(SUBJECT, USD, terminal), "terminal current");
+    }
+
+    function test_currentSnapshotHelpersRevertOutOfRange() public {
+        vm.expectRevert(bytes("NAVSnapshotOracle: snapshotIndex out of range"));
+        oracle.currentSnapshotIndex(SUBJECT, USD, 0);
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: snapshotIndex out of range"));
+        oracle.isSnapshotCurrent(SUBJECT, USD, 0);
+    }
+
     function test_correctionCannotForkOrCrossProvider() public {
         _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
         _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, 0);
@@ -454,17 +508,53 @@ contract NAVSnapshotOracleTest {
         _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T1, "incrementally updated timestamp");
     }
 
-    function test_aggregationRejectsMixedBasis() public {
+    function test_publishNAVRejectsMismatchedStreamBasis() public {
         vm.prank(ADMIN);
         oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
         vm.prank(ADMIN);
         oracle.setStalenessConfig(SUBJECT, USD, 1 days, 30 days);
 
         _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
-        _publish(PROVIDER_B, SUBJECT, USD, PER_UNIT, 101, 2, T0, METHOD_1, NO_CORRECTION);
 
-        vm.expectRevert(bytes("NAVSnapshotOracle: mixed navBasis"));
+        vm.prank(PROVIDER_B);
+        vm.expectRevert(bytes("NAVSnapshotOracle: navBasis mismatch"));
+        oracle.publishNAV(SUBJECT, USD, PER_UNIT, 101, 2, T0, METHOD_1, "", NO_CORRECTION);
+
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, NO_CORRECTION);
+
+        (,, bytes32 basis,,,,) = oracle.aggregatedNAV(SUBJECT, USD);
+        _assertEq(basis, PER_SHARE, "aggregation basis");
+    }
+
+    function test_setNAVBasisRejectsReconfigurationAfterPublish() public {
+        _configureBasis(SUBJECT_2, EUR, PER_SHARE);
+        _publish(PROVIDER_A, SUBJECT_2, EUR, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.prank(ADMIN);
+        vm.expectRevert(bytes("NAVSnapshotOracle: navBasis already configured"));
+        oracle.setNAVBasis(SUBJECT_2, EUR, PER_SHARE);
+    }
+
+    function test_aggregationDoesNotBrickAfterRejectedMismatchedBasis() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 1 days, 30 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.prank(PROVIDER_B);
+        vm.expectRevert(bytes("NAVSnapshotOracle: navBasis mismatch"));
+        oracle.publishNAV(SUBJECT, USD, PER_UNIT, 101, 2, T0, METHOD_1, "", NO_CORRECTION);
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: quorum not met"));
         oracle.aggregatedNAV(SUBJECT, USD);
+
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, NO_CORRECTION);
+
+        (int256 nav,, bytes32 basis,,,,) = oracle.aggregatedNAV(SUBJECT, USD);
+        _assertEq(nav, 100, "lower median after valid provider submission");
+        _assertEq(basis, PER_SHARE, "stream basis after rejected mismatch");
     }
 
     function test_aggregationUsesCorrectedProviderSubmission() public {
@@ -512,6 +602,13 @@ contract NAVSnapshotOracleTest {
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, huge, 18, T0, METHOD_1, NO_CORRECTION);
     }
 
+    function test_deriveTokenCurrencyUsesChainAndTokenDomain() public pure {
+        address token = address(0xC0FFEE);
+        bytes32 expected = keccak256(abi.encodePacked("EIP-XXXX:CURRENCY:TOKEN", uint256(1), token));
+
+        _assertEq(deriveTokenCurrency(1, token), expected, "token currency derivation");
+    }
+
     function test_supportsInterfaces() public view {
         _assertTrue(oracle.supportsInterface(0x01ffc9a7), "erc165");
         _assertTrue(oracle.supportsInterface(type(INAVSnapshotOracle).interfaceId), "oracle interface");
@@ -546,6 +643,11 @@ contract NAVSnapshotOracleTest {
             "ipfs://method",
             correctsIndex
         );
+    }
+
+    function _configureBasis(bytes32 subjectId, bytes32 currency, bytes32 navBasis) internal {
+        vm.prank(ADMIN);
+        oracle.setNAVBasis(subjectId, currency, navBasis);
     }
 
     function _assertTrue(bool condition, string memory message) internal pure {

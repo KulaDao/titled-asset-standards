@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IComplianceEventLog, NO_CORRECTION} from "../interfaces/IComplianceEventLog.sol";
+import {IComplianceEventLog, NO_CORRECTED_BY, NO_CORRECTION} from "../interfaces/IComplianceEventLog.sol";
 import {EVT_CORRECTION} from "../libraries/ComplianceConstants.sol";
 
 contract ComplianceEventLog is IComplianceEventLog {
@@ -76,7 +76,7 @@ contract ComplianceEventLog is IComplianceEventLog {
             require(correctsIndex < eventIndex, "ComplianceEventLog: correctsIndex out of range");
 
             ComplianceEvent storage target = _events[subjectId][correctsIndex];
-            require(target.correctedByIndex == 0, "ComplianceEventLog: target already corrected");
+            require(target.correctedByIndex == NO_CORRECTED_BY, "ComplianceEventLog: target already corrected");
             require(
                 target.actor == msg.sender || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
                 "ComplianceEventLog: correction not authorized"
@@ -99,7 +99,7 @@ contract ComplianceEventLog is IComplianceEventLog {
         stored.occurredAt = occurredAt;
         stored.recordedAt = uint64(block.timestamp);
         stored.correctsIndex = correctsIndex;
-        stored.correctedByIndex = 0;
+        stored.correctedByIndex = NO_CORRECTED_BY;
 
         for (uint256 i = 0; i < parties.length; i++) {
             stored.parties.push(Party({addr: parties[i].addr, role: parties[i].role}));
@@ -115,6 +115,23 @@ contract ComplianceEventLog is IComplianceEventLog {
     function getEvent(bytes32 subjectId, uint256 eventIndex) external view returns (ComplianceEvent memory) {
         require(eventIndex < _events[subjectId].length, "ComplianceEventLog: eventIndex out of range");
         return _copyEvent(_events[subjectId][eventIndex]);
+    }
+
+    function currentEventIndex(bytes32 subjectId, uint256 eventIndex) external view returns (uint256) {
+        require(eventIndex < _events[subjectId].length, "ComplianceEventLog: eventIndex out of range");
+
+        uint256 current = eventIndex;
+        uint256 next = _events[subjectId][current].correctedByIndex;
+        while (next != NO_CORRECTED_BY) {
+            current = next;
+            next = _events[subjectId][current].correctedByIndex;
+        }
+        return current;
+    }
+
+    function isEventCurrent(bytes32 subjectId, uint256 eventIndex) external view returns (bool) {
+        require(eventIndex < _events[subjectId].length, "ComplianceEventLog: eventIndex out of range");
+        return _events[subjectId][eventIndex].correctedByIndex == NO_CORRECTED_BY;
     }
 
     function eventCount(bytes32 subjectId) external view returns (uint256) {

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 uint256 constant NO_CORRECTION = type(uint256).max;
+uint256 constant NO_CORRECTED_BY = 0;
 
 interface INAVSnapshotOracle {
     struct NAVSnapshot {
@@ -15,8 +16,8 @@ interface INAVSnapshotOracle {
         address provider;
         bytes32 methodologyHash;
         string methodologyURI;
-        uint256 correctsIndex;
-        uint256 correctedByIndex;
+        uint256 correctsIndex; // NO_CORRECTION means original/non-correction snapshot.
+        uint256 correctedByIndex; // NO_CORRECTED_BY means this snapshot has no successor correction.
     }
 
     event NAVPublished(
@@ -36,8 +37,12 @@ interface INAVSnapshotOracle {
         bytes32 indexed subjectId, bytes32 indexed currency, uint64 heartbeat, uint64 maxValuationAge
     );
 
+    event NAVBasisConfigured(bytes32 indexed subjectId, bytes32 indexed currency, bytes32 navBasis);
+
     /// @dev MUST reject methodologyHash == bytes32(0). methodologyURI MAY be empty
     ///      only if the implementation documents how verifiers retrieve the methodology.
+    ///      MUST reject if the stream NAV basis is unconfigured or if navBasis does
+    ///      not match the stream's configured NAV basis.
     function publishNAV(
         bytes32 subjectId,
         bytes32 currency,
@@ -50,7 +55,11 @@ interface INAVSnapshotOracle {
         uint256 correctsIndex
     ) external returns (uint256 snapshotIndex);
 
+    function setNAVBasis(bytes32 subjectId, bytes32 currency, bytes32 navBasis) external;
+
     function setStalenessConfig(bytes32 subjectId, bytes32 currency, uint64 heartbeat, uint64 maxValuationAge) external;
+
+    function streamNAVBasis(bytes32 subjectId, bytes32 currency) external view returns (bytes32 navBasis);
 
     function latestNAV(bytes32 subjectId, bytes32 currency)
         external
@@ -82,6 +91,17 @@ interface INAVSnapshotOracle {
         external
         view
         returns (NAVSnapshot memory);
+
+    /// @notice Resolve the terminal snapshot in a correction chain.
+    /// @dev MUST revert if snapshotIndex >= snapshotCount. Follows correctedByIndex until it reaches 0.
+    function currentSnapshotIndex(bytes32 subjectId, bytes32 currency, uint256 snapshotIndex)
+        external
+        view
+        returns (uint256);
+
+    /// @notice Return true when snapshotIndex has not been corrected.
+    /// @dev MUST revert if snapshotIndex >= snapshotCount.
+    function isSnapshotCurrent(bytes32 subjectId, bytes32 currency, uint256 snapshotIndex) external view returns (bool);
 
     function snapshotCount(bytes32 subjectId, bytes32 currency) external view returns (uint256);
 

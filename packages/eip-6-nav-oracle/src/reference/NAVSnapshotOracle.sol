@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {INAVAggregation} from "../interfaces/INAVAggregation.sol";
-import {INAVSnapshotOracle, NO_CORRECTION} from "../interfaces/INAVSnapshotOracle.sol";
+import {INAVSnapshotOracle, NO_CORRECTED_BY, NO_CORRECTION} from "../interfaces/INAVSnapshotOracle.sol";
 import {PER_SHARE, PER_UNIT, TOTAL} from "../libraries/NAVConstants.sol";
 
 contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
@@ -43,6 +43,8 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
     mapping(bytes32 => mapping(address => uint256[])) private _providerSnapshotIndices;
     mapping(bytes32 => StalenessConfig) private _stalenessConfigs;
     mapping(bytes32 => AggregationConfig) private _aggregationConfigs;
+    mapping(bytes32 => bytes32) private _streamNavBasis;
+    mapping(bytes32 => bool) private _streamNavBasisSet;
     mapping(bytes32 => uint256) private _latestStreamSnapshotPlusOne;
     mapping(bytes32 => mapping(address => uint256)) private _latestProviderSnapshotPlusOne;
 
@@ -117,6 +119,9 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         require(block.timestamp <= type(uint64).max, "NAVSnapshotOracle: timestamp overflow");
 
         bytes32 streamKey = _streamKey(params.subjectId, params.currency);
+        require(_streamNavBasisSet[streamKey], "NAVSnapshotOracle: navBasis unconfigured");
+        require(params.navBasis == _streamNavBasis[streamKey], "NAVSnapshotOracle: navBasis mismatch");
+
         snapshotIndex = _snapshots[streamKey].length;
         uint256 existingPlusOne = _providerTimestampSnapshotPlusOne[streamKey][params.valuationTimestamp][msg.sender];
 
@@ -125,7 +130,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         } else {
             require(params.correctsIndex < snapshotIndex, "NAVSnapshotOracle: correctsIndex out of range");
             NAVSnapshot storage target = _snapshots[streamKey][params.correctsIndex];
-            require(target.correctedByIndex == 0, "NAVSnapshotOracle: target already corrected");
+            require(target.correctedByIndex == NO_CORRECTED_BY, "NAVSnapshotOracle: target already corrected");
             require(target.provider == msg.sender, "NAVSnapshotOracle: provider mismatch");
             require(target.valuationTimestamp == params.valuationTimestamp, "NAVSnapshotOracle: valuation mismatch");
             require(target.navBasis == params.navBasis, "NAVSnapshotOracle: navBasis mismatch");
@@ -149,7 +154,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
                 methodologyHash: params.methodologyHash,
                 methodologyURI: params.methodologyURI,
                 correctsIndex: params.correctsIndex,
-                correctedByIndex: 0
+                correctedByIndex: NO_CORRECTED_BY
             })
         );
 
@@ -174,6 +179,19 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         _emitDeviationIfNeeded(streamKey, params.subjectId, params.currency, params.valuationTimestamp);
     }
 
+    function setNAVBasis(bytes32 subjectId, bytes32 currency, bytes32 navBasis_) external onlyRole(CONFIG_ROLE) {
+        require(_isKnownBasis(navBasis_), "NAVSnapshotOracle: unknown navBasis");
+
+        bytes32 streamKey = _streamKey(subjectId, currency);
+        require(!_streamNavBasisSet[streamKey], "NAVSnapshotOracle: navBasis already configured");
+        require(_snapshots[streamKey].length == 0, "NAVSnapshotOracle: stream already active");
+
+        _streamNavBasis[streamKey] = navBasis_;
+        _streamNavBasisSet[streamKey] = true;
+
+        emit NAVBasisConfigured(subjectId, currency, navBasis_);
+    }
+
     function setStalenessConfig(bytes32 subjectId, bytes32 currency, uint64 heartbeat_, uint64 maxValuationAge_)
         external
         onlyRole(CONFIG_ROLE)
@@ -185,6 +203,10 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             StalenessConfig({heartbeat: heartbeat_, maxValuationAge: maxValuationAge_});
 
         emit StalenessConfigUpdated(subjectId, currency, heartbeat_, maxValuationAge_);
+    }
+
+    function streamNAVBasis(bytes32 subjectId, bytes32 currency) external view returns (bytes32 navBasis) {
+        return _streamNavBasis[_streamKey(subjectId, currency)];
     }
 
     function setAggregationConfig(bytes32 subjectId, bytes32 currency, uint256 quorum_, uint256 deviationThresholdBps_)
@@ -256,6 +278,33 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         bytes32 streamKey = _streamKey(subjectId, currency);
         require(snapshotIndex < _snapshots[streamKey].length, "NAVSnapshotOracle: snapshotIndex out of range");
         return _snapshots[streamKey][snapshotIndex];
+    }
+
+    function currentSnapshotIndex(bytes32 subjectId, bytes32 currency, uint256 snapshotIndex)
+        external
+        view
+        returns (uint256)
+    {
+        bytes32 streamKey = _streamKey(subjectId, currency);
+        require(snapshotIndex < _snapshots[streamKey].length, "NAVSnapshotOracle: snapshotIndex out of range");
+
+        uint256 current = snapshotIndex;
+        uint256 next = _snapshots[streamKey][current].correctedByIndex;
+        while (next != NO_CORRECTED_BY) {
+            current = next;
+            next = _snapshots[streamKey][current].correctedByIndex;
+        }
+        return current;
+    }
+
+    function isSnapshotCurrent(bytes32 subjectId, bytes32 currency, uint256 snapshotIndex)
+        external
+        view
+        returns (bool)
+    {
+        bytes32 streamKey = _streamKey(subjectId, currency);
+        require(snapshotIndex < _snapshots[streamKey].length, "NAVSnapshotOracle: snapshotIndex out of range");
+        return _snapshots[streamKey][snapshotIndex].correctedByIndex == NO_CORRECTED_BY;
     }
 
     function snapshotCount(bytes32 subjectId, bytes32 currency) external view returns (uint256) {
@@ -354,7 +403,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             uint256 plusOne = _providerTimestampSnapshotPlusOne[streamKey][timestamp][providers[i]];
             if (plusOne == 0) continue;
             NAVSnapshot storage snap = _snapshots[streamKey][plusOne - 1];
-            if (snap.correctedByIndex != 0) continue;
+            if (snap.correctedByIndex != NO_CORRECTED_BY) continue;
             if (seen == index) {
                 return (
                     plusOne - 1,
@@ -462,7 +511,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         NAVSnapshot storage current = _snapshots[streamKey][currentPlusOne - 1];
         NAVSnapshot storage candidate = _snapshots[streamKey][candidateIndex];
 
-        if (current.correctedByIndex != 0) return true;
+        if (current.correctedByIndex != NO_CORRECTED_BY) return true;
         if (candidate.valuationTimestamp > current.valuationTimestamp) return true;
         return
             candidate.valuationTimestamp == current.valuationTimestamp && candidate.publishedAt >= current.publishedAt;
@@ -538,7 +587,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         for (uint256 i = 0; i < providers.length; i++) {
             uint256 plusOne = _providerTimestampSnapshotPlusOne[streamKey][valuationTimestamp][providers[i]];
             if (plusOne == 0) continue;
-            if (_snapshots[streamKey][plusOne - 1].correctedByIndex == 0) count++;
+            if (_snapshots[streamKey][plusOne - 1].correctedByIndex == NO_CORRECTED_BY) count++;
         }
     }
 
@@ -549,7 +598,6 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         int256[] memory values = new int256[](providerCount_);
 
         uint8 maxDecimals;
-        bytes32 commonBasis;
         uint256 used;
         uint64 latestPublishedAt_;
 
@@ -558,13 +606,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             if (plusOne == 0) continue;
 
             NAVSnapshot storage snap = _snapshots[streamKey][plusOne - 1];
-            if (snap.correctedByIndex != 0) continue;
-
-            if (used == 0) {
-                commonBasis = snap.navBasis;
-            } else {
-                require(snap.navBasis == commonBasis, "NAVSnapshotOracle: mixed navBasis");
-            }
+            if (snap.correctedByIndex != NO_CORRECTED_BY) continue;
 
             if (snap.decimals > maxDecimals) maxDecimals = snap.decimals;
             if (snap.publishedAt > latestPublishedAt_) latestPublishedAt_ = snap.publishedAt;
@@ -578,7 +620,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             if (plusOne == 0) continue;
 
             NAVSnapshot storage snap = _snapshots[streamKey][plusOne - 1];
-            if (snap.correctedByIndex != 0) continue;
+            if (snap.correctedByIndex != NO_CORRECTED_BY) continue;
 
             values[--used] = _normalize(snap.nav, snap.decimals, maxDecimals);
         }
@@ -587,7 +629,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
 
         set.medianNav = values[(values.length - 1) / 2];
         set.decimals = maxDecimals;
-        set.navBasis = commonBasis;
+        set.navBasis = _streamNavBasis[streamKey];
         set.latestPublishedAt = latestPublishedAt_;
         set.providerCount = values.length;
         set.minNav = values[0];
@@ -600,7 +642,6 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         AggregationConfig memory config = _aggregationConfigs[streamKey];
         if (config.quorum == 0) return;
         if (_eligibleProviderCount(streamKey, valuationTimestamp) < config.quorum) return;
-        if (_hasMixedBasis(streamKey, valuationTimestamp)) return;
 
         AggregatedSet memory set = _aggregatedSetForTimestamp(streamKey, valuationTimestamp);
         uint256 deviationBps_ = _deviationBps(set.minNav, set.maxNav, set.medianNav);
@@ -619,7 +660,6 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         int256[] memory values = new int256[](providerCount_);
 
         uint8 maxDecimals;
-        bytes32 commonBasis;
         uint256 used;
 
         for (uint256 i = 0; i < providers.length; i++) {
@@ -627,10 +667,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             if (plusOne == 0) continue;
 
             NAVSnapshot storage snap = _snapshots[streamKey][plusOne - 1];
-            if (snap.correctedByIndex != 0) continue;
-
-            if (used == 0) commonBasis = snap.navBasis;
-            else require(snap.navBasis == commonBasis, "NAVSnapshotOracle: mixed navBasis");
+            if (snap.correctedByIndex != NO_CORRECTED_BY) continue;
 
             if (snap.decimals > maxDecimals) maxDecimals = snap.decimals;
             used++;
@@ -642,7 +679,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             if (plusOne == 0) continue;
 
             NAVSnapshot storage snap = _snapshots[streamKey][plusOne - 1];
-            if (snap.correctedByIndex != 0) continue;
+            if (snap.correctedByIndex != NO_CORRECTED_BY) continue;
 
             values[used] = _normalize(snap.nav, snap.decimals, maxDecimals);
             used++;
@@ -652,34 +689,11 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
 
         set.medianNav = values[(values.length - 1) / 2];
         set.decimals = maxDecimals;
-        set.navBasis = commonBasis;
+        set.navBasis = _streamNavBasis[streamKey];
         set.valuationTimestamp = valuationTimestamp;
         set.providerCount = values.length;
         set.minNav = values[0];
         set.maxNav = values[values.length - 1];
-    }
-
-    function _hasMixedBasis(bytes32 streamKey, uint64 valuationTimestamp) internal view returns (bool) {
-        address[] storage providers = _timestampProviders[streamKey][valuationTimestamp];
-        bytes32 commonBasis;
-        bool basisSet;
-
-        for (uint256 i = 0; i < providers.length; i++) {
-            uint256 plusOne = _providerTimestampSnapshotPlusOne[streamKey][valuationTimestamp][providers[i]];
-            if (plusOne == 0) continue;
-
-            NAVSnapshot storage snap = _snapshots[streamKey][plusOne - 1];
-            if (snap.correctedByIndex != 0) continue;
-
-            if (!basisSet) {
-                basisSet = true;
-                commonBasis = snap.navBasis;
-            } else if (snap.navBasis != commonBasis) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     function _normalize(int256 nav, uint8 fromDecimals, uint8 toDecimals) internal pure returns (int256) {

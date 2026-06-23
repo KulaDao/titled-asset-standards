@@ -71,6 +71,7 @@ contract TransferDomainRegistryTest is Test {
         assertTrue(route.permitted);
         assertEq(route.effectiveAt, uint64(1_000_000));
         assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE);
+        assertEq(route.revocationEvidenceHash, bytes32(0));
         assertTrue(registry.isRoutePermitted(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL));
     }
 
@@ -84,6 +85,20 @@ contract TransferDomainRegistryTest is Test {
         vm.prank(registrar);
         vm.expectRevert("TransferDomainRegistry: zero permissionEvidenceHash");
         registry.setRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, bytes32(0));
+    }
+
+    function test_setRoute_revertsZeroRouteIdentifiers() public {
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero sourceDomain");
+        registry.setRoute(bytes32(0), DOMAIN_ZM, ASSET_MINERAL, PERMISSION_EVIDENCE);
+
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero destinationDomain");
+        registry.setRoute(DOMAIN_MU, bytes32(0), ASSET_MINERAL, PERMISSION_EVIDENCE);
+
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero assetClass");
+        registry.setRoute(DOMAIN_MU, DOMAIN_ZM, bytes32(0), PERMISSION_EVIDENCE);
     }
 
     function test_routesAreDirectional() public {
@@ -119,6 +134,7 @@ contract TransferDomainRegistryTest is Test {
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, 0);
         assertEq(route.permissionEvidenceHash, bytes32(0));
+        assertEq(route.revocationEvidenceHash, bytes32(0));
     }
 
     function test_revokeRoute_disablesRouteAndEmits() public {
@@ -136,6 +152,7 @@ contract TransferDomainRegistryTest is Test {
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, uint64(2_000_000));
         assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE);
+        assertEq(route.revocationEvidenceHash, REVOCATION_EVIDENCE);
         assertFalse(registry.isRoutePermitted(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL));
     }
 
@@ -153,12 +170,27 @@ contract TransferDomainRegistryTest is Test {
         assertFalse(route.permitted);
         assertEq(route.effectiveAt, uint64(3_000_000));
         assertEq(route.permissionEvidenceHash, bytes32(0));
+        assertEq(route.revocationEvidenceHash, REVOCATION_EVIDENCE);
     }
 
     function test_revokeRoute_revertsZeroRevocationEvidenceHash() public {
         vm.prank(registrar);
         vm.expectRevert("TransferDomainRegistry: zero revocationEvidenceHash");
         registry.revokeRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, bytes32(0));
+    }
+
+    function test_revokeRoute_revertsZeroRouteIdentifiers() public {
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero sourceDomain");
+        registry.revokeRoute(bytes32(0), DOMAIN_ZM, ASSET_MINERAL, REVOCATION_EVIDENCE);
+
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero destinationDomain");
+        registry.revokeRoute(DOMAIN_MU, bytes32(0), ASSET_MINERAL, REVOCATION_EVIDENCE);
+
+        vm.prank(registrar);
+        vm.expectRevert("TransferDomainRegistry: zero assetClass");
+        registry.revokeRoute(DOMAIN_MU, DOMAIN_ZM, bytes32(0), REVOCATION_EVIDENCE);
     }
 
     function test_revokeRoute_doesNotRevertIfAlreadyRevoked() public {
@@ -170,7 +202,10 @@ contract TransferDomainRegistryTest is Test {
         vm.prank(registrar);
         registry.revokeRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL, keccak256("second-revocation"));
 
+        ITransferDomainRegistry.Route memory route = registry.getRoute(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL);
+
         assertFalse(registry.isRoutePermitted(DOMAIN_MU, DOMAIN_ZM, ASSET_MINERAL));
+        assertEq(route.revocationEvidenceHash, keccak256("second-revocation"));
     }
 
     function test_setRoute_reenablesRevokedRouteWithNewPermissionEvidence() public {
@@ -187,6 +222,7 @@ contract TransferDomainRegistryTest is Test {
         assertTrue(route.permitted);
         assertEq(route.effectiveAt, uint64(4_000_000));
         assertEq(route.permissionEvidenceHash, PERMISSION_EVIDENCE_2);
+        assertEq(route.revocationEvidenceHash, bytes32(0));
     }
 
     function test_isRoutePermittedBatch_returnsIndependentResults() public {
