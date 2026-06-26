@@ -8,10 +8,10 @@ import {BundleHashLib} from "../src/libraries/BundleHashLib.sol";
 
 /// @title  ExampleERC721WithDocuments
 /// @notice Shows how per-token ERC-721 assets each get their own independent
-///         document bundle. Each NFT's EIP-1 anchorId is the subjectId for
-///         its EIP-2 document bundles.
+///         document bundle. Each NFT's asset registry `anchorId` is the `subjectId` for
+///         its document bundles.
 ///
-/// Prerequisites — deploy/register per-token EIP-1 asset anchors first:
+/// Prerequisites — deploy/register per-token asset anchors in `erc-asset-registry` first:
 ///   export ANCHOR_A=<anchorId for property A (NYC Office)>
 ///   export ANCHOR_B=<anchorId for property B (London Warehouse)>
 ///

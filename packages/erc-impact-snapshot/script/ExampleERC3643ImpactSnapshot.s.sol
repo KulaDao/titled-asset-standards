@@ -15,10 +15,10 @@ import {
 
 /// @title  ExampleERC3643ImpactSnapshot
 /// @notice Shows ESG impact reporting for a T-REX (ERC-3643) green bond.
-///         The bond's EIP-1 anchorId is the subjectId in EIP-5, linking on-chain
-///         token compliance (EIP-1), document bundles (EIP-2), and impact data (EIP-5).
+///         The bond's asset registry `anchorId` is the `subjectId` in the impact snapshot log,
+///         linking on-chain token compliance, document bundles, and impact data.
 ///
-/// Prerequisites -- run ExampleERC3643Lifecycle.s.sol first (EIP-1 package):
+/// Prerequisites -- run ExampleERC3643Lifecycle.s.sol first (`erc-asset-registry`):
 ///   export ASSET_ANCHOR_ID=<anchorId from registerAnchor for the bond>
 ///
 /// Run:
@@ -184,7 +184,7 @@ contract ExampleERC3643ImpactSnapshot is Script {
         } else {
             console.log("CO2 correction chain linked; no attestation (set ESG_AUDITOR_PRIVATE_KEY to attest).");
         }
-        console.log("EIP-1 anchor ID = EIP-2 subjectId = EIP-5 subjectId.");
-        console.log("All three EIP layers reference the same on-chain asset identity.");
+        console.log("Asset registry anchorId = document bundle subjectId = impact snapshot subjectId.");
+        console.log("All three standards reference the same on-chain asset identity.");
     }
 }

@@ -76,7 +76,7 @@ anchorBundle() ──► ACTIVE ──► supersedeBundle() ──► SUPERSEDED
 `subjectId == bytes32(0)` and `role == bytes32(0)` are invalid in the
 reference implementation. Applications that need standalone anchoring should
 derive a nonzero subject identifier from application context, such as
-`keccak256(abi.encodePacked("EIP-XXXX:DOCUMENT_SUBJECT", msg.sender, nonce))`,
+`keccak256(abi.encodePacked("ERC-XXXX:DOCUMENT_SUBJECT", msg.sender, nonce))`,
 rather than sharing a zero namespace.
 
 `metadataURI` may be empty. An empty URI means the anchor stores the bundle commitment and document count without an on-chain retrieval pointer. Deployments that require off-chain document availability SHOULD require a non-empty URI at the application layer.
@@ -118,11 +118,11 @@ medusa fuzz                         # requires medusa.json
 
 ## Known Pre-deployment Blocker
 
-`BundleHashLib.SCHEMA_V1 = keccak256("EIP-XXXX:BUNDLE:V1")` contains a placeholder ERC number. **This hash will change** when the ERC number is assigned — update `SCHEMA_V1` before any production deployment.
+`BundleHashLib.SCHEMA_V1 = keccak256("ERC-XXXX:BUNDLE:V1")` contains a placeholder ERC number. **This hash will change** when the ERC number is assigned — update `SCHEMA_V1` before any production deployment.
 
 Pre-submission checklist:
 
-- Replace every `EIP-XXXX` namespace constant with the assigned ERC number.
+- Replace every `ERC-XXXX` namespace constant with the assigned ERC number.
 - Regenerate and publish normative test vectors after the namespace update.
 - Confirm reference implementation repository links and fixture hashes before Review status.
 

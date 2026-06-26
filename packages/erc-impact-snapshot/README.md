@@ -46,7 +46,7 @@ medusa fuzz --timeout 120
 - `pendingMethodology()` exposes scheduled future methodology hashes, URIs, and effective ordinals before activation
 - Self-attestation is blocked: the address that recorded a snapshot cannot endorse it as attestor. This is an address-level guard only; auditor credentialing, affiliate independence, and legal independence are application-layer controls.
 - Exact duplicate originals for the same `(subjectId, indicatorId, periodStart, periodEnd)` are rejected, but overlapping periods with different timestamps are allowed. Consumers that aggregate impact data must reconcile overlaps to avoid double counting.
-- Custom indicators should use domain-separated identifiers such as `keccak256("EIP-XXXX:INDICATOR:<NAMESPACE>:<NAME>:V1")`. Do not use generic values such as `keccak256("CUSTOM")`.
+- Custom indicators should use domain-separated identifiers such as `keccak256("ERC-XXXX:INDICATOR:<NAMESPACE>:<NAME>:V1")`. Do not use generic values such as `keccak256("CUSTOM")`.
 - Unit identifiers are `keccak256` of canonical unit strings, preferably SI or UCUM-compatible (`"kWh"`, `"tCO2e"`, `"m3"`). Implementations should document exact case, pluralization, and conversion rules for every custom unit.
 
 ## Zero-Value Policy

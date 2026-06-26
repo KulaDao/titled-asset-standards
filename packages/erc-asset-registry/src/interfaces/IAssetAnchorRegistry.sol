@@ -30,8 +30,9 @@ interface IAssetAnchorRegistry {
     ///      Reverts if any required metadata field (assetClass, jurisdiction, attestationDate,
     ///      expiresAt, uri) is missing or empty.
     ///      The returned anchorId is suitable as a subjectId for any subject-keyed companion
-    ///      standard, including document bundle anchoring (EIP-2), compliance event logging
-    ///      (EIP-4), impact snapshot logging (EIP-5), and NAV oracle feeds (EIP-6).
+    ///      standard, including document bundle anchoring (`erc-document-bundle-anchor`),
+    ///      compliance event logging (`erc-compliance-event-log`), impact snapshot logging
+    ///      (`erc-impact-snapshot`), and NAV oracle feeds (`erc-nav-oracle`).
     function registerAnchor(bytes32 legalHash, bytes32 evidenceHash, bytes calldata metadata)
         external
         returns (bytes32 anchorId);

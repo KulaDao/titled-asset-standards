@@ -180,7 +180,7 @@ Acceptance criteria:
 Implementation notes:
 
 - Reference expiry is inclusive: active while `block.timestamp <= expiresAt`, expired when `block.timestamp > expiresAt`.
-- README and tests now use domain-separated metadata IDs such as `keccak256("EIP-XXXX:ASSET_CLASS:EQUITY")`.
+- README and tests now use domain-separated metadata IDs such as `keccak256("ERC-XXXX:ASSET_CLASS:EQUITY")`.
 
 Acceptance criteria:
 
@@ -229,7 +229,7 @@ Implementation notes:
 
 ### Schema Constant
 
-- [x] Keep `EIP-XXXX:BUNDLE:V1` only if the README clearly marks it as pre-assignment.
+- [x] Keep `ERC-XXXX:BUNDLE:V1` only if the README clearly marks it as pre-assignment.
 - [x] Add a single pre-deployment checklist item to update all constants after ERC number assignment.
 
 Acceptance criteria:
@@ -342,7 +342,7 @@ Implementation notes:
 
 - Added `currentEventIndex(subjectId, eventIndex)` to resolve terminal correction-chain state.
 - Added `isEventCurrent(subjectId, eventIndex)` to check whether an event has not been corrected.
-- README warns that `latestEventByType()` is type-indexing only, not current-state resolution.
+- README warns that `lastRecordedEventByType()` is type-indexing only, not current-state resolution.
 
 ---
 
@@ -459,7 +459,7 @@ Implementation notes:
 ### Currency Encoding
 
 - [x] Add custom/token currency derivation guidance.
-- [x] Example: `keccak256(abi.encodePacked("EIP-XXXX:CURRENCY:TOKEN", chainId, tokenAddress))`.
+- [x] Example: `keccak256(abi.encodePacked("ERC-XXXX:CURRENCY:TOKEN", chainId, tokenAddress))`.
 - [x] Add tests or constants if needed.
 
 Acceptance criteria:
@@ -480,7 +480,7 @@ Implementation notes:
 - [ ] Make package numbering and descriptions consistent.
 - [ ] Link each package to its Known Limits section.
 - [ ] Add a "Pre-Submission Checklist" covering:
-  - Replace `EIP-XXXX`
+  - Replace `ERC-XXXX` when ERC numbers are assigned
   - Confirm prior-art statuses
   - Confirm reference implementation repo links
   - Confirm test vectors where required

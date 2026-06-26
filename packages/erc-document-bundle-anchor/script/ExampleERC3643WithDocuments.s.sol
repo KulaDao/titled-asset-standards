@@ -17,10 +17,11 @@ interface IERC3643Compliance {
 
 /// @title  ExampleERC3643WithDocuments
 /// @notice Shows the full compliance stack for a T-REX security token:
-///         asset anchor (EIP-1) + document bundles (EIP-2) + BundleAnchorVerifier
+///         asset registry (`erc-asset-registry`) + document bundles
+///         (`erc-document-bundle-anchor`) + BundleAnchorVerifier
 ///         used as a transfer pre-check in a downstream settlement contract.
 ///
-/// Prerequisites — deploy/register an EIP-1 asset-bound ERC-3643-style token first:
+/// Prerequisites — deploy/register an asset-bound ERC-3643-style token in `erc-asset-registry` first:
 ///   export ASSET_ANCHOR_ID=<anchorId from registerAnchor>
 ///   export TOKEN_ADDRESS=<deployed AssetBoundERC3643 address>
 ///
@@ -33,8 +34,8 @@ interface IERC3643Compliance {
 ///   1. Anchor regulatory documents against the bond's asset anchor ID
 ///   2. Deploy BundleAnchorVerifier and show how it wraps compliance checks
 ///   3. Deploy a minimal SettlementGuard that combines both compliance layers:
-///        - EIP-1 anchor active (asset not expired/deactivated)
-///        - EIP-2 document bundles present (regulatory docs anchored)
+///        - Asset registry anchor active (asset not expired/deactivated)
+///        - Document bundles present (regulatory docs anchored)
 ///        - ERC-3643 investor whitelisted and not frozen
 ///   4. Show what a compliant settlement check looks like
 contract ExampleERC3643WithDocuments is Script {
@@ -51,12 +52,12 @@ contract ExampleERC3643WithDocuments is Script {
 
         vm.startBroadcast(deployerKey);
 
-        // 1. Deploy EIP-2 DocumentBundleAnchor
+        // 1. Deploy DocumentBundleAnchor
         DocumentBundleAnchor bundleAnchor = new DocumentBundleAnchor(deployer);
         console.log("DocumentBundleAnchor:", address(bundleAnchor));
 
         // 2. Anchor the three required regulatory document bundles
-        //    subjectId = assetAnchorId links documents to the bond asset (EIP-1)
+        //    subjectId = assetAnchorId links documents to the bond asset (asset registry)
         string[] memory prospectusDocs = new string[](2);
         prospectusDocs[0] = "bond-prospectus-v1.pdf";
         prospectusDocs[1] = "bond-risk-factors-v1.pdf";
@@ -122,7 +123,7 @@ contract ExampleERC3643WithDocuments is Script {
     }
 }
 
-/// @notice Minimal settlement guard that enforces both EIP-1 and EIP-2 compliance
+/// @notice Minimal settlement guard that enforces both asset registry and document bundle compliance
 ///         before allowing a bond trade to settle.
 /// @dev    In production this would be called by a DEX or OTC settlement contract.
 contract SettlementGuard {

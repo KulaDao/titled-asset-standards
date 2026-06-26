@@ -70,7 +70,7 @@ chains are linear.
 
 Use `currentEventIndex(subjectId, eventIndex)` to resolve the terminal event in
 a correction chain. Use `isEventCurrent(subjectId, eventIndex)` to check whether
-an event has not been corrected. `latestEventByType()` is only a type-index
+an event has not been corrected. `lastRecordedEventByType()` is only a type-index
 helper by recording order: it returns the highest event index for that type, not
 the event with the greatest `occurredAt`. It does not resolve correction chains
 and should not be treated as the current state for an earlier event.
@@ -107,5 +107,5 @@ medusa fuzz
 
 ## Known Pre-deployment Blocker
 
-The constants use `EIP-XXXX` domain strings. These domain strings should be
+The constants use `ERC-XXXX` domain strings. These domain strings should be
 updated once the ERC number is assigned and before any production deployment.

@@ -77,8 +77,8 @@ operation.
 Binding scopes are explicit:
 
 ```solidity
-bytes32 constant BINDING_SCOPE_CONTRACT = keccak256("EIP-XXXX:BINDING_SCOPE:CONTRACT");
-bytes32 constant BINDING_SCOPE_TOKEN_ID = keccak256("EIP-XXXX:BINDING_SCOPE:TOKEN_ID");
+bytes32 constant BINDING_SCOPE_CONTRACT = keccak256("ERC-XXXX:BINDING_SCOPE:CONTRACT");
+bytes32 constant BINDING_SCOPE_TOKEN_ID = keccak256("ERC-XXXX:BINDING_SCOPE:TOKEN_ID");
 ```
 
 For whole-contract binding, use `BINDING_SCOPE_CONTRACT` with `tokenId = 0` as the canonical unused value. For per-token binding, use `BINDING_SCOPE_TOKEN_ID`; token ID `0` is valid and is not treated as a sentinel.
@@ -137,8 +137,8 @@ Packed ABI-encoded `AnchorMetadata` struct — encode/decode via `AnchorMetadata
 
 ```solidity
 struct AnchorMetadata {
-    bytes32 assetClass;      // e.g. keccak256("EIP-XXXX:ASSET_CLASS:EQUITY") — required
-    bytes32 jurisdiction;    // e.g. keccak256("EIP-XXXX:JURISDICTION:US")    — required
+    bytes32 assetClass;      // e.g. keccak256("ERC-XXXX:ASSET_CLASS:EQUITY") — required
+    bytes32 jurisdiction;    // e.g. keccak256("ERC-XXXX:JURISDICTION:US")    — required
     uint64  attestationDate; // Unix timestamp, <= block.timestamp at registration
     uint64  expiresAt;       // Unix timestamp, > attestationDate
     bytes   uri;             // IPFS / HTTPS pointer     — required

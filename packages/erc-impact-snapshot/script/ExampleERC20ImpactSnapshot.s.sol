@@ -8,9 +8,9 @@ import {CARBON_OFFSET, JOBS_CREATED, UNIT_TCO2E, UNIT_FTE} from "../src/librarie
 
 /// @title  ExampleERC20ImpactSnapshot
 /// @notice Shows how an ERC-20 asset-bound token (e.g. a gold reserve fund)
-///         reports and attests quarterly impact data using EIP-5.
+///         reports and attests quarterly impact data using the impact snapshot log.
 ///
-/// Prerequisites -- run ExampleERC20Lifecycle.s.sol first (EIP-1 package):
+/// Prerequisites -- run ExampleERC20Lifecycle.s.sol first (`erc-asset-registry`):
 ///   export ASSET_ANCHOR_ID=<anchorId from registerAnchor>
 ///
 /// Run:
@@ -150,7 +150,7 @@ contract ExampleERC20ImpactSnapshot is Script {
         vm.stopBroadcast();
 
         console.log("\n== ERC-20 impact summary ==");
-        console.log("Asset anchor ID used as subjectId -- links all EIP-5 data back to EIP-1 asset.");
+        console.log("Asset anchor ID used as subjectId -- links impact data back to the asset registry anchor.");
         if (attested) {
             console.log("Q1 carbon corrected; Q2 original; Q1 carbon attested by independent auditor.");
         } else {

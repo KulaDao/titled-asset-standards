@@ -42,9 +42,9 @@ median aggregation.
 - Currency IDs: `USD`, `EUR`, `GBP`, `KES`, `ZMW`
 - Token-denominated currency derivation:
   `deriveTokenCurrency(chainId, tokenAddress)`, equivalent to
-  `keccak256(abi.encodePacked("EIP-XXXX:CURRENCY:TOKEN", chainId, tokenAddress))`
+  `keccak256(abi.encodePacked("ERC-XXXX:CURRENCY:TOKEN", chainId, tokenAddress))`
 
-Fiat currencies use `keccak256("EIP-XXXX:CURRENCY:<ISO4217>")`. Token
+Fiat currencies use `keccak256("ERC-XXXX:CURRENCY:<ISO4217>")`. Token
 currencies include both `chainId` and `tokenAddress` so the same token address
 on two chains does not collide. Other custom denominations should use an
 application-documented, domain-separated string and should not reuse an ISO
@@ -137,7 +137,7 @@ medusa fuzz
 
 ## Known Pre-deployment Blocker
 
-The constants use `EIP-XXXX` domain strings. These domain strings should be updated
+The constants use `ERC-XXXX` domain strings. These domain strings should be updated
 once the ERC number is assigned and before any production deployment.
 
 ## Known Limits

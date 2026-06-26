@@ -8,11 +8,11 @@ import {ENERGY_SAVED, CARBON_OFFSET, UNIT_KWH, UNIT_TCO2E} from "../src/librarie
 
 /// @title  ExampleERC721ImpactSnapshot
 /// @notice Shows how an ERC-721 real-estate collection reports per-property
-///         impact data using EIP-5. Each token's EIP-1 anchorId is the subjectId --
-///         every property has independent, isolated impact records.
+///         impact data using the impact snapshot log. Each token's asset registry `anchorId`
+///         is the `subjectId` — every property has independent, isolated impact records.
 ///
 ///
-/// Prerequisites -- run ExampleERC721Lifecycle.s.sol first (EIP-1 package):
+/// Prerequisites -- run ExampleERC721Lifecycle.s.sol first (`erc-asset-registry`):
 ///   export ANCHOR_A=<anchorId for property A (NYC Office)>
 ///   export ANCHOR_B=<anchorId for property B (London Warehouse)>
 ///
@@ -127,7 +127,7 @@ contract ExampleERC721ImpactSnapshot is Script {
         vm.stopBroadcast();
 
         console.log("\n== ERC-721 impact summary ==");
-        console.log("Each NFT's anchorId is an independent subjectId in EIP-5.");
+        console.log("Each NFT's anchorId is an independent subjectId in the impact snapshot log.");
         console.log("Methodology update on property A does not affect property B.");
     }
 }
