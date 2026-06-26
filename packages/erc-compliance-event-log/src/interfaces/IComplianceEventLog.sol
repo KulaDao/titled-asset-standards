@@ -77,9 +77,9 @@ interface IComplianceEventLog {
         view
         returns (uint256 eventIndex);
 
-    /// @notice Get the latest recorded event index for an event type.
-    /// @dev "Latest" means highest event index / recording order, not max occurredAt.
+    /// @notice Get the most recently *recorded* event index for an event type.
+    /// @dev Returns recording order (highest event index), not max occurredAt.
     ///      Consumers needing occurrence-time recency MUST iterate eventByTypeAt()
     ///      and compare occurredAt values.
-    function latestEventByType(bytes32 subjectId, bytes32 eventType) external view returns (uint256 eventIndex);
+    function lastRecordedEventByType(bytes32 subjectId, bytes32 eventType) external view returns (uint256 eventIndex);
 }

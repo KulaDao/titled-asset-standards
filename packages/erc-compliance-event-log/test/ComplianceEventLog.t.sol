@@ -111,7 +111,7 @@ contract ComplianceEventLogTest is Test {
         assertEq(eventLog.eventCount(SUBJECT), 1, "subject count");
         assertEq(eventLog.eventCountByType(SUBJECT, EVT_TRANSFER), 1, "type count");
         assertEq(eventLog.eventByTypeAt(SUBJECT, EVT_TRANSFER, 0), 0, "type ordinal");
-        assertEq(eventLog.latestEventByType(SUBJECT, EVT_TRANSFER), 0, "latest type");
+        assertEq(eventLog.lastRecordedEventByType(SUBJECT, EVT_TRANSFER), 0, "latest type");
 
         IComplianceEventLog.ComplianceEvent memory stored = eventLog.getEvent(SUBJECT, 0);
         assertEq(stored.subjectId, SUBJECT, "subject");
@@ -294,7 +294,7 @@ contract ComplianceEventLogTest is Test {
         assertEq(eventLog.getEvent(SUBJECT, 0).correctedByIndex, 1, "target corrected by");
         assertEq(eventLog.getEvent(SUBJECT, 1).correctsIndex, 0, "correction corrects");
         assertEq(eventLog.eventCountByType(SUBJECT, EVT_CORRECTION), 1, "correction type count");
-        assertEq(eventLog.latestEventByType(SUBJECT, EVT_CORRECTION), 1, "latest correction");
+        assertEq(eventLog.lastRecordedEventByType(SUBJECT, EVT_CORRECTION), 1, "latest correction");
 
         vm.warp(T0 + 2);
         vm.prank(RECORDER);
@@ -541,7 +541,7 @@ contract ComplianceEventLogTest is Test {
         assertEq(eventLog.eventCount(SUBJECT_2), 1, "subject 2 count");
         assertEq(eventLog.eventCountByType(SUBJECT, EVT_TRANSFER), 1, "subject transfer count");
         assertEq(eventLog.eventCountByType(SUBJECT, EVT_FREEZE), 1, "subject freeze count");
-        assertEq(eventLog.latestEventByType(SUBJECT, EVT_FREEZE), 1, "latest freeze");
+        assertEq(eventLog.lastRecordedEventByType(SUBJECT, EVT_FREEZE), 1, "latest freeze");
     }
 
     function test_recordEventAcceptsUnknownPayloadProfileAsOpaque() public {
@@ -649,7 +649,7 @@ contract ComplianceEventLogTest is Test {
         eventLog.eventByTypeAt(SUBJECT, EVT_TRANSFER, 0);
 
         vm.expectRevert(bytes("ComplianceEventLog: no events for type"));
-        eventLog.latestEventByType(SUBJECT, EVT_TRANSFER);
+        eventLog.lastRecordedEventByType(SUBJECT, EVT_TRANSFER);
     }
 
     function test_supportsInterface() public view {
