@@ -1,5 +1,5 @@
 {
-  "../eip-3-document-bundle/lib/openzeppelin-contracts": {
+  "../erc-document-bundle-anchor/lib/openzeppelin-contracts": {
     "rev": "932fddf69a699a9a80fd2396fd1a2ab91cdda123"
   },
   "lib/openzeppelin-contracts": {

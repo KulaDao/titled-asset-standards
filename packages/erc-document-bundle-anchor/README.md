@@ -1,4 +1,4 @@
-# eip-2-document-bundle
+# erc-document-bundle-anchor
 
 On-chain anchor that binds a deterministic bundle hash (derived from a set of document entries) to a `(subjectId, role)` namespace, with full lifecycle management and permanent supersession history.
 
@@ -106,7 +106,7 @@ require(recomputed == active);
 ## Build & Test
 
 ```bash
-cd packages/eip-2-document-bundle
+cd packages/erc-document-bundle-anchor
 
 forge build
 forge test                          # unit tests
@@ -118,14 +118,14 @@ medusa fuzz                         # requires medusa.json
 
 ## Known Pre-deployment Blocker
 
-`BundleHashLib.SCHEMA_V1 = keccak256("EIP-XXXX:BUNDLE:V1")` contains a placeholder EIP number. **This hash will change** when the EIP number is assigned — update `SCHEMA_V1` before any production deployment.
+`BundleHashLib.SCHEMA_V1 = keccak256("EIP-XXXX:BUNDLE:V1")` contains a placeholder ERC number. **This hash will change** when the ERC number is assigned — update `SCHEMA_V1` before any production deployment.
 
 Pre-submission checklist:
 
-- Replace every `EIP-XXXX` namespace constant with the assigned EIP number.
+- Replace every `EIP-XXXX` namespace constant with the assigned ERC number.
 - Regenerate and publish normative test vectors after the namespace update.
 - Confirm reference implementation repository links and fixture hashes before Review status.
 
-## Companion EIPs
+## Companion standards
 
-The `subjectId` used here is designed to be the `anchorId` returned by **EIP-1** (Asset-Bound Token Registry), linking document bundles directly to on-chain asset anchors.
+The `subjectId` used here is designed to be the `anchorId` returned by the **Asset-Bound Token Registry** (`erc-asset-registry`), linking document bundles directly to on-chain asset anchors.

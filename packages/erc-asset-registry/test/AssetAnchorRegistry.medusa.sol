@@ -6,7 +6,7 @@ import {AssetRegistryConstants} from "../src/libraries/AssetRegistryConstants.so
 import {AnchorMetadataLib} from "../src/libraries/AnchorMetadataLib.sol";
 
 /// @dev Medusa fuzz harness for AssetAnchorRegistry.
-///      Run: medusa fuzz (from packages/eip-1-asset-registry)
+///      Run: medusa fuzz (from packages/erc-asset-registry)
 ///
 ///      Invariants checked after every call sequence:
 ///        property_tokenBindingBoundToAtMostOneAnchor

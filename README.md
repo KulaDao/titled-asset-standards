@@ -1,7 +1,7 @@
 ---
-EIP: kula-suite
-Title: Kula Protocol EIP Suite — Tokenized Asset Infrastructure Standards
-Description: Six composable EIP specifications for on-chain asset registries, document anchoring, transfer governance, compliance logging, impact reporting, and NAV oracles.
+EIP: titled-asset-standards
+Title: Titled Asset Standards — Composable ERC Specifications for Tokenized Asset Infrastructure
+Description: Six composable ERC specifications for on-chain asset registries, document anchoring, transfer governance, compliance logging, impact reporting, and NAV oracles.
 Discussions-To: https://ethereum-magicians.org
 Status: Draft
 Type: Standards Track
@@ -12,16 +12,16 @@ Requires: EIP-165, ERC-20, ERC-721
 
 ## Abstract
 
-This repository contains six composable EIP specifications designed to close structural gaps in the EVM standards landscape for tokenized real-world assets. Each EIP addresses a narrow, well-defined problem and can be adopted independently. Together they form a complete infrastructure layer for compliant, auditable, and interoperable tokenized assets.
+This repository contains six composable ERC specifications designed to close structural gaps in the EVM standards landscape for tokenized real-world assets. Each standard addresses a narrow, well-defined problem and can be adopted independently. Together they form a complete infrastructure layer for compliant, auditable, and interoperable tokenized assets.
 
-| EIP | Title | Package |
-|-----|-------|---------|
-| EIP-1 | Asset-Bound Token Registry | `packages/eip-1-asset-registry` |
-| EIP-2 | Canonical Document Bundle Anchor | `packages/eip-2-document-bundle` |
-| EIP-3 | Directional Transfer Domain Registry | `packages/eip-3-transfer-domain` |
-| EIP-4 | Subject-Linked Compliance Event Log | `packages/eip-4-compliance-event` |
-| EIP-5 | Subject-Linked Impact Snapshot Log | `packages/eip-5-impact-snapshot` |
-| EIP-6 | Subject-Linked NAV Snapshot Oracle | `packages/eip-6-nav-oracle` |
+| Standard | Package |
+|----------|---------|
+| Asset-Bound Token Registry | `packages/erc-asset-registry` |
+| Canonical Document Bundle Anchor | `packages/erc-document-bundle-anchor` |
+| Directional Transfer Domain Registry | `packages/erc-transfer-domain` |
+| Subject-Linked Compliance Event Log | `packages/erc-compliance-event-log` |
+| Subject-Linked Impact Snapshot Log | `packages/erc-impact-snapshot` |
+| Subject-Linked NAV Snapshot Oracle | `packages/erc-nav-oracle` |
 
 ---
 
@@ -36,15 +36,15 @@ Tokenized real-world assets — real estate, private credit, commodities, carbon
 - **Impact reporting** — ESG and sustainability obligations generate structured time-series data that has no standard append-only representation on-chain.
 - **NAV oracles** — Net asset value feeds for funds and structured products require a subject-keyed, provider-attributed snapshot model with staleness guarantees. No such standard exists.
 
-These six EIPs are designed to compose: the `anchorId` returned by EIP-1 serves as `subjectId` in EIP-2 through EIP-6, creating a single identity thread across the full asset lifecycle.
+These six standards are designed to compose: the `anchorId` returned by the asset registry serves as `subjectId` in the document bundle anchor, transfer domain registry, compliance event log, impact snapshot log, and NAV oracle — creating a single identity thread across the full asset lifecycle.
 
 ---
 
 ## Specification
 
-### EIP-1 — Asset-Bound Token Registry
+### Asset-Bound Token Registry
 
-Binds a dual-hash anchor — a legal document commitment and an evidence commitment — to a token contract or token ID. The `anchorId` is deterministic (`keccak256(abi.encode(legalHash, evidenceHash))`) and serves as the canonical on-chain identity for an asset across all companion EIPs.
+Binds a dual-hash anchor — a legal document commitment and an evidence commitment — to a token contract or token ID. The `anchorId` is deterministic (`keccak256(abi.encode(legalHash, evidenceHash))`) and serves as the canonical on-chain identity for an asset across all companion standards.
 
 **Core interface:**
 
@@ -79,7 +79,7 @@ REGISTER ──► ACTIVE ──► EXPIRED (expiresAt reached)
 
 ---
 
-### EIP-2 — Canonical Document Bundle Anchor
+### Canonical Document Bundle Anchor
 
 Anchors a deterministic, order-independent bundle hash derived from a set of document entries to a `(subjectId, role)` namespace with full supersession history. The bundle hash is computed off-chain using `BundleHashLib`, which applies a total order over all five leaf fields before hashing so that any permutation of the same document set produces the same hash.
 
@@ -130,7 +130,7 @@ Superseded records remain permanently queryable. `activeBundle(subjectId, role)`
 
 ---
 
-### EIP-3 — Directional Transfer Domain Registry
+### Directional Transfer Domain Registry
 
 A token-agnostic registry for answering whether a route from `sourceDomain` to `destinationDomain` is permitted for a given `assetClass`. Domains and asset classes are opaque `bytes32` identifiers. The registry does not define what a domain means or enforce transfers — it is a lookup layer.
 
@@ -172,13 +172,13 @@ Route key derivation: `keccak256(abi.encodePacked(sourceDomain, destinationDomai
 
 ---
 
-### EIP-4 — Subject-Linked Compliance Event Log
+### Subject-Linked Compliance Event Log
 
 An append-only on-chain log of structured compliance events bound to a `(subjectId, eventType)` namespace. Each event carries an evidence hash, a structured payload hash, and a timestamp, giving regulators and auditors a tamper-evident audit trail independent of any specific token standard.
 
 ---
 
-### EIP-5 — Subject-Linked Impact Snapshot Log
+### Subject-Linked Impact Snapshot Log
 
 An append-only on-chain log that binds structured, auditable impact data to a `(subjectId, indicatorId)` namespace. Snapshots form immutable correction chains — a superseding snapshot links back to its predecessor, and `currentSnapshotForPeriod` walks the chain to the terminal value. Attestors independently endorse snapshots without ability to modify them. Methodology versioning is future-only: `effectiveFromOrdinal >= indicatorSnapshotCount` at the time of supersession.
 
@@ -235,7 +235,7 @@ interface IMethodologyVersioning {
 
 ---
 
-### EIP-6 — Subject-Linked NAV Snapshot Oracle
+### Subject-Linked NAV Snapshot Oracle
 
 A subject-keyed, provider-attributed NAV snapshot oracle with quorum-based aggregation, decimal normalization, fork-free correction chains, and explicit publication and valuation staleness. NAV snapshots are keyed by `(subjectId, currency)`.
 
@@ -280,11 +280,11 @@ interface INAVAggregation {
 
 ### Composability via `subjectId`
 
-Every EIP from EIP-2 through EIP-6 accepts a `subjectId` parameter. By convention this is the `anchorId` returned by EIP-1 `registerAnchor`. This single identity thread means a consumer can pivot from a token address to its legal documents (EIP-2), permitted transfer routes (EIP-3), compliance history (EIP-4), impact performance (EIP-5), and current NAV (EIP-6) using only the anchor ID — without any central registry or coordinator contract.
+Every standard from the document bundle anchor through the NAV oracle accepts a `subjectId` parameter. By convention this is the `anchorId` returned by the asset registry's `registerAnchor`. This single identity thread means a consumer can pivot from a token address to its legal documents (document bundle anchor), permitted transfer routes (transfer domain registry), compliance history (compliance event log), impact performance (impact snapshot log), and current NAV (NAV oracle) using only the anchor ID — without any central registry or coordinator contract.
 
 ### Separation of concerns
 
-Each EIP is a narrow interface. None of the six standards knows about the others at the Solidity level. Composability is a naming convention, not an inheritance dependency. This keeps each standard independently adoptable and prevents one standard's upgrade path from blocking another's.
+Each standard is a narrow interface. None of the six standards knows about the others at the Solidity level. Composability is a naming convention, not an inheritance dependency. This keeps each standard independently adoptable and prevents one standard's upgrade path from blocking another's.
 
 ### `bytes32` identifiers
 
@@ -292,17 +292,17 @@ Domains, asset classes, indicator IDs, currencies, and subject IDs are all `byte
 
 ### Append-only logs
 
-EIP-2, EIP-4, EIP-5, and EIP-6 are all append-only. Corrections and supersessions add new records and mark old ones — they never overwrite. This gives full audit history at the cost of slightly higher storage, a trade-off that is appropriate for regulated asset infrastructure where history is a compliance requirement.
+The document bundle anchor, compliance event log, impact snapshot log, and NAV oracle are all append-only. Corrections and supersessions add new records and mark old ones — they never overwrite. This gives full audit history at the cost of slightly higher storage, a trade-off that is appropriate for regulated asset infrastructure where history is a compliance requirement.
 
 ### Methodology versioning is future-only
 
-In EIP-5, `effectiveFromOrdinal >= indicatorSnapshotCount` at call time. Retroactive methodology rewriting would break the chain of custody for any snapshot already attested under the old methodology. Future scheduling (`effectiveFromOrdinal > count`) lets a reporter pre-announce a methodology transition before it takes effect.
+In the impact snapshot log, `effectiveFromOrdinal >= indicatorSnapshotCount` at call time. Retroactive methodology rewriting would break the chain of custody for any snapshot already attested under the old methodology. Future scheduling (`effectiveFromOrdinal > count`) lets a reporter pre-announce a methodology transition before it takes effect.
 
 ---
 
 ## Backwards Compatibility
 
-Each EIP is a new standard with no changes to existing interfaces. All six EIPs use ERC-165 for interface detection. EIP-1 and EIP-6 reference implementations use OpenZeppelin `AccessControl`. None of the interfaces conflict with ERC-20, ERC-721, ERC-1155, or ERC-3643.
+Each standard is a new interface with no changes to existing interfaces. All six use ERC-165 for interface detection. The asset registry and NAV oracle reference implementations use OpenZeppelin `AccessControl`. None of the interfaces conflict with ERC-20, ERC-721, ERC-1155, or ERC-3643.
 
 ---
 
@@ -311,7 +311,7 @@ Each EIP is a new standard with no changes to existing interfaces. All six EIPs 
 Each package is a self-contained Foundry project:
 
 ```
-packages/eip-N-name/
+packages/erc-<name>/
   src/
     interfaces/       # Solidity interfaces (the standard, CC0-1.0)
     reference/        # Reference implementation (MIT)
@@ -327,7 +327,7 @@ packages/eip-N-name/
 **Build and test:**
 
 ```bash
-cd packages/eip-N-name
+cd packages/erc-<name>
 forge install
 forge build
 forge test
@@ -352,23 +352,23 @@ All state-changing functions in the reference implementations are protected by `
 
 ### Append-only invariants
 
-The correction and supersession mechanisms in EIP-2, EIP-5, and EIP-6 are fork-free by construction — each record can be superseded or corrected at most once. Consumers must walk the correction chain to the terminal record rather than relying on the original index.
+The correction and supersession mechanisms in the document bundle anchor, impact snapshot log, and NAV oracle are fork-free by construction — each record can be superseded or corrected at most once. Consumers must walk the correction chain to the terminal record rather than relying on the original index.
 
 ### Oracle trust model
 
-EIP-6 is a permissioned oracle. `PROVIDER_ROLE` holders are trusted to publish accurate NAV data. Quorum and deviation detection reduce the impact of a single compromised provider but do not eliminate it. Consumers should configure quorum thresholds and deviation limits appropriate to their trust assumptions.
+The NAV oracle is a permissioned oracle. `PROVIDER_ROLE` holders are trusted to publish accurate NAV data. Quorum and deviation detection reduce the impact of a single compromised provider but do not eliminate it. Consumers should configure quorum thresholds and deviation limits appropriate to their trust assumptions.
 
 ### Staleness
 
-`latestNAVStatus` in EIP-6 returns explicit staleness flags. Consumers must check staleness before acting on NAV data. A stale feed must not be used for settlement or margin calculations without explicit operator override.
+`latestNAVStatus` in the NAV oracle returns explicit staleness flags. Consumers must check staleness before acting on NAV data. A stale feed must not be used for settlement or margin calculations without explicit operator override.
 
 ### `block.timestamp` dependency
 
-EIP-3 grace period revocation, EIP-5 `reportedAt`, and EIP-6 publication timestamps all use `block.timestamp`. Validators can shift this by up to approximately 12 seconds. None of the standards use `block.timestamp` for randomness or for security-critical timing that would be exploitable within a 12-second window.
+Transfer domain registry grace period revocation, impact snapshot log `reportedAt`, and NAV oracle publication timestamps all use `block.timestamp`. Validators can shift this by up to approximately 12 seconds. None of the standards use `block.timestamp` for randomness or for security-critical timing that would be exploitable within a 12-second window.
 
-### EIP number placeholders
+### ERC number placeholders
 
-Domain-separated constants in EIP-5 and EIP-6 contain `EIP-XXXX` placeholders that will change when EIP numbers are assigned. **Do not deploy to production until these are updated.** The hash values of all canonical identifiers will change.
+Domain-separated constants in the impact snapshot log and NAV oracle contain `EIP-XXXX` placeholders that will change when ERC numbers are assigned. **Do not deploy to production until these are updated.** The hash values of all canonical identifiers will change.
 
 ---
 

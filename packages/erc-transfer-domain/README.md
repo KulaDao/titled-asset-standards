@@ -1,6 +1,6 @@
-# eip-3-transfer-domain
+# erc-transfer-domain
 
-Reference implementation for **EIP-3: Directional Transfer Domain Registry**.
+Reference implementation for **Directional Transfer Domain Registry**.
 
 This package implements a token-agnostic registry for answering one narrow
 question:
