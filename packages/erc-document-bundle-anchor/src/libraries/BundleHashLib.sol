@@ -11,7 +11,7 @@ library BundleHashLib {
     }
 
     // TODO: replace XXXX with assigned EIP number before submission — this hash will change
-    bytes32 internal constant SCHEMA_V1 = keccak256("EIP-XXXX:BUNDLE:V1");
+    bytes32 internal constant SCHEMA_V1 = keccak256("ERC-XXXX:BUNDLE:V1");
     bytes32 internal constant PROFILE_RAW = keccak256("NORM:RAW:V1");
     bytes32 internal constant PROFILE_JSON_RFC8785 = keccak256("NORM:JSON:RFC8785:V1");
     bytes32 internal constant PROFILE_XML_C14N11 = keccak256("NORM:XML:C14N11:V1");

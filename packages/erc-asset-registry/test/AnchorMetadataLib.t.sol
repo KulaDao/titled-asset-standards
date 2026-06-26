@@ -11,8 +11,8 @@ contract AnchorMetadataLibHarness {
 }
 
 contract AnchorMetadataLibTest is Test {
-    bytes32 constant ASSET_CLASS_EQUITY = keccak256("EIP-XXXX:ASSET_CLASS:EQUITY");
-    bytes32 constant JURISDICTION_US = keccak256("EIP-XXXX:JURISDICTION:US");
+    bytes32 constant ASSET_CLASS_EQUITY = keccak256("ERC-XXXX:ASSET_CLASS:EQUITY");
+    bytes32 constant JURISDICTION_US = keccak256("ERC-XXXX:JURISDICTION:US");
 
     AnchorMetadataLibHarness internal harness;
 
