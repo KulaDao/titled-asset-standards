@@ -9,6 +9,7 @@ import {IMethodologyVersioning} from "../interfaces/IMethodologyVersioning.sol";
 contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodologyVersioning, AccessControl {
     bytes32 public constant REPORTER_ROLE = keccak256("REPORTER");
     bytes32 public constant ATTESTOR_ROLE = keccak256("ATTESTOR");
+    uint256 public constant MAX_METHODOLOGY_LOOKAHEAD = 1000;
 
     struct PendingMethodology {
         bytes32 newMethodologyHash;
@@ -265,6 +266,10 @@ contract ImpactSnapshotLog is IImpactSnapshotLog, IImpactAttestation, IMethodolo
         require(
             effectiveFromOrdinal >= currentOrdinal,
             "ImpactSnapshotLog: effectiveFromOrdinal before current indicatorSnapshotCount"
+        );
+        require(
+            effectiveFromOrdinal <= currentOrdinal + MAX_METHODOLOGY_LOOKAHEAD,
+            "ImpactSnapshotLog: effectiveFromOrdinal too far in the future"
         );
 
         if (effectiveFromOrdinal == currentOrdinal) {
