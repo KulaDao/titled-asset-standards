@@ -6,7 +6,7 @@ import {ITransferDomainRegistry} from "../src/interfaces/ITransferDomainRegistry
 import {GracefulTransferDomainRegistry} from "../src/reference/GracefulTransferDomainRegistry.sol";
 
 /// @dev Medusa fuzz harness for the directional route registry.
-///      Run: medusa fuzz (from packages/eip-3-transfer-domain)
+///      Run: medusa fuzz (from packages/erc-transfer-domain)
 ///
 ///      Invariants checked after randomized route lifecycle calls:
 ///        property_routesMatchModel

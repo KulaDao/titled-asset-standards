@@ -1,8 +1,8 @@
-# EIP Suite Technical Cleanup Checklist
+# Titled Asset Standards Technical Cleanup Checklist
 
 Audit source: `origin/main` at `0a18ece`.
 
-This checklist tracks the remaining implementation and documentation cleanup after the EIP-1 through EIP-6 review pass. The goal is to close interface/reference drift, remove ambiguity before EIP submission, and make the technical implementations match the strengthened whitepaper language.
+This checklist tracks the remaining implementation and documentation cleanup after the six-standard review pass. The goal is to close interface/reference drift, remove ambiguity before ERC submission, and make the technical implementations match the strengthened whitepaper language.
 
 ## Status Legend
 
@@ -13,13 +13,13 @@ This checklist tracks the remaining implementation and documentation cleanup aft
 
 ## Recommended Order
 
-1. EIP-1 binding model fixes (complete)
+1. Asset registry binding model fixes (complete)
 2. Cross-suite zero-value policy (complete)
-3. EIP-2 canonical hash hardening (complete)
-4. EIP-3 evidence semantics (complete)
-5. EIP-4 payload/evidence semantics (complete)
-6. EIP-5 attestation/methodology polish (complete)
-7. EIP-6 methodology/currency guidance (complete)
+3. Document bundle anchor canonical hash hardening (complete)
+4. Transfer domain registry evidence semantics (complete)
+5. Compliance event log payload/evidence semantics (complete)
+6. Impact snapshot log attestation/methodology polish (complete)
+7. NAV oracle methodology/currency guidance (complete)
 8. Root README and per-package limits pass
 9. Medusa non-triviality assertions
 10. Full verification run
@@ -32,10 +32,10 @@ This checklist tracks the remaining implementation and documentation cleanup aft
 
 - [x] Decide suite-wide whether `bytes32(0)` means "not provided" or is invalid for evidence/methodology/hash fields.
 - [x] Apply the policy consistently across:
-  - EIP-3 route permission/revocation evidence hashes
-  - EIP-4 compliance event evidence hashes
-  - EIP-5 attestation evidence hashes
-  - EIP-6 methodology hashes
+  - Transfer domain registry route permission/revocation evidence hashes
+  - Compliance event log compliance event evidence hashes
+  - Impact snapshot log attestation evidence hashes
+  - NAV oracle methodology hashes
 - [x] Add tests for accepted/rejected zero values in each affected package.
 - [x] Document the policy in every package README.
 
@@ -48,10 +48,10 @@ Acceptance criteria:
 Implementation notes:
 
 - Required evidence and methodology hash fields are invalid when `bytes32(0)`.
-- EIP-3 rejects zero permission, revocation, graceful revocation, and cancellation evidence hashes.
-- EIP-4 rejects zero compliance event evidence hashes.
-- EIP-5 rejects zero attestation evidence hashes and already rejected zero methodology hashes.
-- EIP-6 rejects zero methodology hashes.
+- Transfer domain registry rejects zero permission, revocation, graceful revocation, and cancellation evidence hashes.
+- Compliance event log rejects zero compliance event evidence hashes.
+- Impact snapshot log rejects zero attestation evidence hashes and already rejected zero methodology hashes.
+- NAV oracle rejects zero methodology hashes.
 - Evidence and methodology URI fields remain optional pointers unless a package-specific rule says otherwise.
 
 ### Interface / Reference Drift
@@ -106,9 +106,9 @@ Acceptance criteria:
 
 ---
 
-## EIP-1: Asset-Bound Token Registry
+## Asset-Bound Token Registry
 
-Package: `packages/eip-1-asset-registry`
+Package: `packages/erc-asset-registry`
 
 Primary status: resolved in the local cleanup branch.
 
@@ -188,9 +188,9 @@ Acceptance criteria:
 
 ---
 
-## EIP-2: Canonical Document Bundle Anchor
+## Document Bundle Anchor
 
-Package: `packages/eip-2-document-bundle`
+Package: `packages/erc-document-bundle-anchor`
 
 Primary status: mostly resolved, but canonicalization can still be misused.
 
@@ -230,7 +230,7 @@ Implementation notes:
 ### Schema Constant
 
 - [x] Keep `EIP-XXXX:BUNDLE:V1` only if the README clearly marks it as pre-assignment.
-- [x] Add a single pre-deployment checklist item to update all constants after EIP number assignment.
+- [x] Add a single pre-deployment checklist item to update all constants after ERC number assignment.
 
 Acceptance criteria:
 
@@ -238,9 +238,9 @@ Acceptance criteria:
 
 ---
 
-## EIP-3: Directional Transfer Domain Registry
+## Transfer Domain Registry
 
-Package: `packages/eip-3-transfer-domain`
+Package: `packages/erc-transfer-domain`
 
 Primary status: resolved.
 
@@ -282,9 +282,9 @@ Acceptance criteria:
 
 ---
 
-## EIP-4: Subject-Linked Compliance Event Log
+## Compliance Event Log
 
-Package: `packages/eip-4-compliance-event`
+Package: `packages/erc-compliance-event-log`
 
 Primary status: resolved.
 
@@ -346,9 +346,9 @@ Implementation notes:
 
 ---
 
-## EIP-5: Subject-Linked Impact Snapshot Log
+## Impact Snapshot Log
 
-Package: `packages/eip-5-impact-snapshot`
+Package: `packages/erc-impact-snapshot`
 
 Primary status: resolved.
 
@@ -411,9 +411,9 @@ Implementation notes:
 
 ---
 
-## EIP-6: Subject-Linked NAV Snapshot Oracle
+## NAV Oracle
 
-Package: `packages/eip-6-nav-oracle`
+Package: `packages/erc-nav-oracle`
 
 Primary status: resolved.
 
@@ -444,7 +444,7 @@ Implementation notes:
 ### Methodology Hash Derivation
 
 - [x] Document whether `methodologyHash` is raw bytes, document bundle hash, or implementation-defined.
-- [x] If EIP-2 document bundles are recommended, add example derivation.
+- [x] If document bundle anchors are recommended, add example derivation.
 
 Acceptance criteria:
 
@@ -453,7 +453,7 @@ Acceptance criteria:
 Implementation notes:
 
 - README documents the reference implementation as storage-only for methodology fields.
-- Recommended derivations are `keccak256(methodologyDocumentBytes)` or an EIP-2 canonical document bundle hash.
+- Recommended derivations are `keccak256(methodologyDocumentBytes)` or a document bundle anchor canonical bundle hash.
 - README documents what `methodologyURI` should resolve to for each derivation path.
 
 ### Currency Encoding
@@ -497,7 +497,7 @@ Acceptance criteria:
 Run per package after each package-specific patch:
 
 ```bash
-cd /private/tmp/kula-eip-suite-audit-main/packages/<package>
+cd packages/<package>
 /Users/reagansimpson/.foundry/bin/forge fmt --check
 /Users/reagansimpson/.foundry/bin/forge build --sizes
 /Users/reagansimpson/.foundry/bin/forge test -vvv
@@ -506,7 +506,7 @@ cd /private/tmp/kula-eip-suite-audit-main/packages/<package>
 Run from repo root after all patches:
 
 ```bash
-cd /private/tmp/kula-eip-suite-audit-main
+cd /path/to/titled-asset-standards
 git diff --check
 git status --short
 ```
@@ -522,12 +522,12 @@ medusa fuzz
 
 Recommended PR split:
 
-1. `fix(eip-1): clarify binding scope and token interfaces`
-2. `fix(eip-2): harden canonical bundle hashing`
-3. `fix(eip-3): clarify evidence semantics`
-4. `fix(eip-4): define evidence and payload semantics`
-5. `fix(eip-5): improve attestation and methodology discoverability`
-6. `fix(eip-6): require methodology metadata and document integrations`
+1. `fix(erc-asset-registry): clarify binding scope and token interfaces`
+2. `fix(erc-document-bundle-anchor): harden canonical bundle hashing`
+3. `fix(erc-transfer-domain): clarify evidence semantics`
+4. `fix(erc-compliance-event-log): define evidence and payload semantics`
+5. `fix(erc-impact-snapshot): improve attestation and methodology discoverability`
+6. `fix(erc-nav-oracle): require methodology metadata and document integrations`
 7. `docs: align root README and known limits`
 
-If time is tight, combine 2 through 6 into one technical cleanup PR, but keep EIP-1 separate because it changes the core interface shape.
+If time is tight, combine 2 through 6 into one technical cleanup PR, but keep the asset registry separate because it changes the core interface shape.

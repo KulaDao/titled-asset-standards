@@ -1,4 +1,4 @@
-# eip-1-asset-registry
+# erc-asset-registry
 
 On-chain registry that binds a dual-hash anchor (legal + evidence document commitments) to a token contract or token ID.
 
@@ -116,7 +116,7 @@ The registry enforces the registry-side of this check at bind time (`anchorRegis
 ## Build & Test
 
 ```bash
-cd packages/eip-1-asset-registry
+cd packages/erc-asset-registry
 
 # Build
 forge build
@@ -148,11 +148,11 @@ struct AnchorMetadata {
 
 `assetClass` SHOULD be a domain-separated identifier for the implementation's taxonomy. `jurisdiction` SHOULD be a domain-separated identifier for the uppercase ISO 3166-1 alpha-2 code when the subject has a single primary country jurisdiction.
 
-## Companion EIPs
+## Companion standards
 
 The `anchorId` returned by `registerAnchor` is designed to serve as `subjectId` in:
 
-- **EIP-2** — Document Bundle Anchor
-- **EIP-4** — Compliance Event Log
-- **EIP-5** — Impact Snapshot Log
-- **EIP-6** — NAV Oracle Feed
+- **Document Bundle Anchor** (`erc-document-bundle-anchor`)
+- **Compliance Event Log** (`erc-compliance-event-log`)
+- **Impact Snapshot Log** (`erc-impact-snapshot`)
+- **NAV Oracle** (`erc-nav-oracle`)

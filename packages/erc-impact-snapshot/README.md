@@ -1,4 +1,4 @@
-# eip-5-impact-snapshot
+# erc-impact-snapshot
 
 On-chain append-only impact snapshot log that binds structured, auditable impact data to a `(subjectId, indicatorId)` namespace, with correction chains, role-gated attestation, and methodology versioning.
 
@@ -23,7 +23,7 @@ On-chain append-only impact snapshot log that binds structured, auditable impact
 ## Build & Test
 
 ```bash
-cd packages/eip-5-impact-snapshot
+cd packages/erc-impact-snapshot
 
 forge build
 forge test                # unit tests

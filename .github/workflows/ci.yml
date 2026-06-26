@@ -13,12 +13,12 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          - eip-1-asset-registry
-          - eip-2-document-bundle
-          - eip-3-transfer-domain
-          - eip-4-compliance-event
-          - eip-5-impact-snapshot
-          - eip-6-nav-oracle
+          - erc-asset-registry
+          - erc-document-bundle-anchor
+          - erc-transfer-domain
+          - erc-compliance-event-log
+          - erc-impact-snapshot
+          - erc-nav-oracle
 
     steps:
       - uses: actions/checkout@v4
@@ -69,12 +69,12 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          - eip-1-asset-registry
-          - eip-2-document-bundle
-          - eip-3-transfer-domain
-          - eip-4-compliance-event
-          - eip-5-impact-snapshot
-          - eip-6-nav-oracle
+          - erc-asset-registry
+          - erc-document-bundle-anchor
+          - erc-transfer-domain
+          - erc-compliance-event-log
+          - erc-impact-snapshot
+          - erc-nav-oracle
 
     steps:
       - uses: actions/checkout@v4
@@ -114,12 +114,12 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          - eip-1-asset-registry
-          - eip-2-document-bundle
-          - eip-3-transfer-domain
-          - eip-4-compliance-event
-          - eip-5-impact-snapshot
-          - eip-6-nav-oracle
+          - erc-asset-registry
+          - erc-document-bundle-anchor
+          - erc-transfer-domain
+          - erc-compliance-event-log
+          - erc-impact-snapshot
+          - erc-nav-oracle
 
     steps:
       - uses: actions/checkout@v4
@@ -177,11 +177,11 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          - eip-2-document-bundle
-          - eip-3-transfer-domain
-          - eip-4-compliance-event
-          - eip-5-impact-snapshot
-          - eip-6-nav-oracle
+          - erc-document-bundle-anchor
+          - erc-transfer-domain
+          - erc-compliance-event-log
+          - erc-impact-snapshot
+          - erc-nav-oracle
 
     steps:
       - uses: actions/checkout@v4

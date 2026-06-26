@@ -1,4 +1,4 @@
-# eip-6-nav-oracle
+# erc-nav-oracle
 
 Subject-linked NAV snapshot oracle with provider attribution, valuation timestamps,
 methodology references, correction provenance, staleness metadata, and deterministic
@@ -66,11 +66,11 @@ without interpreting the document format. Deployments must document the hash
 derivation they use. Recommended derivations are:
 
 - Raw document commitment: `keccak256(methodologyDocumentBytes)`.
-- EIP-2 document bundle commitment: use the canonical bundle hash when the
+- Document bundle anchor commitment: use the canonical bundle hash when the
   methodology is a bundle of documents or when deterministic document
   normalization is required.
 
-When an EIP-2 bundle is used, `methodologyURI` should resolve to metadata that
+When a document bundle anchor is used, `methodologyURI` should resolve to metadata that
 identifies the bundle manifest and the normalization profiles needed to
 reproduce the hash. When raw document bytes are used, `methodologyURI` should
 resolve to those exact bytes or metadata that makes the retrieval path
@@ -125,7 +125,7 @@ timestamp and bricking `aggregatedNAV()` for downstream consumers.
 ## Build & Test
 
 ```bash
-cd packages/eip-6-nav-oracle
+cd packages/erc-nav-oracle
 
 forge build
 forge test -vvv
@@ -138,7 +138,7 @@ medusa fuzz
 ## Known Pre-deployment Blocker
 
 The constants use `EIP-XXXX` domain strings. These domain strings should be updated
-once the EIP number is assigned and before any production deployment.
+once the ERC number is assigned and before any production deployment.
 
 ## Known Limits
 

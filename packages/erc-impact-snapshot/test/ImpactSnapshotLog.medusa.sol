@@ -22,7 +22,7 @@ contract ImpactAttestorActor {
 }
 
 /// @dev Medusa fuzz harness for ImpactSnapshotLog.
-///      Run: medusa fuzz (from packages/eip-5-impact-snapshot)
+///      Run: medusa fuzz (from packages/erc-impact-snapshot)
 ///
 ///      Invariants checked after every call sequence:
 ///        property_currentPeriodSnapshotIsAlwaysTerminal

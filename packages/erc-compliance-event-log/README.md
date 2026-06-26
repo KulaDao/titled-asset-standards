@@ -1,4 +1,4 @@
-# eip-4-compliance-event
+# erc-compliance-event-log
 
 Subject-linked compliance event log with actor attribution, claimed authority,
 evidence links, payload profiles, type indexing, and correction provenance.
@@ -95,7 +95,7 @@ The reference implementation is dependency-free and includes minimal role contro
 ## Build & Test
 
 ```bash
-cd packages/eip-4-compliance-event
+cd packages/erc-compliance-event-log
 
 forge build
 forge test -vvv
@@ -108,4 +108,4 @@ medusa fuzz
 ## Known Pre-deployment Blocker
 
 The constants use `EIP-XXXX` domain strings. These domain strings should be
-updated once the EIP number is assigned and before any production deployment.
+updated once the ERC number is assigned and before any production deployment.

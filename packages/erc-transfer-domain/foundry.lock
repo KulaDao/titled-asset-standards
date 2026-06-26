@@ -1,14 +1,14 @@
 {
-  "../eip-1-asset-registry/lib/openzeppelin-contracts": {
+  "../erc-asset-registry/lib/openzeppelin-contracts": {
     "rev": "acd4ff74de833399287ed6b31b4debf6b2b35527"
   },
-  "../eip-2-document-bundle/lib/openzeppelin-contracts": {
+  "../erc-document-bundle-anchor/lib/openzeppelin-contracts": {
     "rev": "932fddf69a699a9a80fd2396fd1a2ab91cdda123"
   },
-  "../eip-5-impact-snapshot/lib/forge-std": {
+  "../erc-impact-snapshot/lib/forge-std": {
     "rev": "c90c02ffa470b46d92ffaab093baeb296300870b"
   },
-  "../eip-5-impact-snapshot/lib/openzeppelin-contracts": {
+  "../erc-impact-snapshot/lib/openzeppelin-contracts": {
     "rev": "932fddf69a699a9a80fd2396fd1a2ab91cdda123"
   },
   "lib/openzeppelin-contracts": {
