@@ -368,7 +368,17 @@ Transfer domain registry grace period revocation, impact snapshot log `reportedA
 
 ### ERC number placeholders
 
-Domain-separated constants in the impact snapshot log and NAV oracle contain `ERC-XXXX` placeholders that will change when ERC numbers are assigned. **Do not deploy to production until these are updated.** The hash values of all canonical identifiers will change.
+Domain-separated constants across this repository use `ERC-XXXX` placeholders that must be replaced with assigned ERC numbers before production deployment. Update all of the following together — any unchanged placeholder changes the `keccak256` of canonical identifiers:
+
+| Package | Library |
+|---------|---------|
+| `erc-asset-registry` | `AssetRegistryConstants.sol` |
+| `erc-document-bundle-anchor` | `BundleHashLib.sol` |
+| `erc-compliance-event-log` | `ComplianceConstants.sol` |
+| `erc-impact-snapshot` | `ImpactConstants.sol` |
+| `erc-nav-oracle` | `NAVConstants.sol` |
+
+**Do not deploy to production until every `ERC-XXXX` string in those files (and matching tests/docs) is updated.** Off-chain consumers that hard-code indicator IDs, event types, bundle schema hashes, etc. must be updated in the same release.
 
 ---
 
