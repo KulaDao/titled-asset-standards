@@ -231,7 +231,7 @@ interface IMethodologyVersioning {
 
 **Correction chain:** `correctsIndex = NO_CORRECTION` (`type(uint256).max`) for original snapshots. A correction must match the target's `indicatorId`, `periodStart`, and `periodEnd`. Fork prevention is enforced — each snapshot can be corrected at most once.
 
-**Canonical indicators** (domain-separated via `keccak256("EIP-XXXX:INDICATOR:<name>")`): `CARBON_OFFSET`, `CARBON_EMITTED`, `ENERGY_GENERATED`, `ENERGY_SAVED`, `WATER_TREATED`, `JOBS_CREATED`, `BENEFICIARIES`, `BIODIVERSITY_AREA`, `WASTE_DIVERTED`.
+**Canonical indicators** (domain-separated via `keccak256("ERC-XXXX:INDICATOR:<name>")`): `CARBON_OFFSET`, `CARBON_EMITTED`, `ENERGY_GENERATED`, `ENERGY_SAVED`, `WATER_TREATED`, `JOBS_CREATED`, `BENEFICIARIES`, `BIODIVERSITY_AREA`, `WASTE_DIVERTED`.
 
 ---
 
@@ -368,7 +368,7 @@ Transfer domain registry grace period revocation, impact snapshot log `reportedA
 
 ### ERC number placeholders
 
-Domain-separated constants in the impact snapshot log and NAV oracle contain `EIP-XXXX` placeholders that will change when ERC numbers are assigned. **Do not deploy to production until these are updated.** The hash values of all canonical identifiers will change.
+Domain-separated constants in the impact snapshot log and NAV oracle contain `ERC-XXXX` placeholders that will change when ERC numbers are assigned. **Do not deploy to production until these are updated.** The hash values of all canonical identifiers will change.
 
 ---
 

@@ -6,16 +6,16 @@ import {DocumentBundleAnchor} from "../src/reference/DocumentBundleAnchor.sol";
 import {BundleAnchorVerifier} from "../src/reference/BundleAnchorVerifier.sol";
 import {BundleHashLib} from "../src/libraries/BundleHashLib.sol";
 
-/// @notice Minimal EIP-1 registry interface — only what this script needs.
+/// @notice Minimal asset registry interface — only what this script needs.
 interface IAssetRegistry {
     function isActive(bytes32 anchorId) external view returns (bool);
 }
 
 /// @title  ExampleERC20WithDocuments
 /// @notice Shows how compliance document bundles are anchored against an
-///         ERC-20 asset-bound token using EIP-1 + EIP-2 together.
+///         ERC-20 asset-bound token using the asset registry and document bundle anchor together.
 ///
-/// Prerequisites — deploy/register an EIP-1 asset anchor first:
+/// Prerequisites — deploy/register an asset anchor in `erc-asset-registry` first:
 ///   export REGISTRY_ADDRESS=<deployed AssetAnchorRegistry address>
 ///   export ASSET_ANCHOR_ID=<anchorId returned by registerAnchor>
 ///   export COMPLIANCE_PRIVATE_KEY=<optional key that should anchor documents>
@@ -26,16 +26,16 @@ interface IAssetRegistry {
 ///     --broadcast -vvvv
 ///
 /// What this demonstrates:
-///   1. Deploy DocumentBundleAnchor (EIP-2)
+///   1. Deploy DocumentBundleAnchor (`erc-document-bundle-anchor`)
 ///   2. Grant ANCHOR_ROLE to compliance officer
 ///   3. Anchor a LEGAL_BASIS document bundle linked to the ERC-20 asset
 ///   4. Anchor a DUE_DILIGENCE document bundle for the same asset
 ///   5. Deploy BundleAnchorVerifier and use it as a compliance pre-check
 ///   6. Show that the verifier can check both document types are present
-///   7. Show that anchor deactivation (EIP-1) still reflects correctly
+///   7. Show that anchor deactivation in the asset registry still reflects correctly
 ///      — the asset and its documents are linked by the shared subjectId
 contract ExampleERC20WithDocuments is Script {
-    // EIP-1 role constants — same derivation as in AssetAnchorRegistry
+    // Asset registry role constants — same derivation as in AssetAnchorRegistry
     bytes32 constant ROLE_LEGAL_BASIS = keccak256("LEGAL_BASIS");
     bytes32 constant ROLE_DUE_DILIGENCE = keccak256("DUE_DILIGENCE");
 
@@ -47,10 +47,10 @@ contract ExampleERC20WithDocuments is Script {
         uint256 complianceKey = vm.envOr("COMPLIANCE_PRIVATE_KEY", deployerKey);
         address compliance = vm.addr(complianceKey);
 
-        require(IAssetRegistry(registry).isActive(assetAnchorId), "ExampleERC20WithDocuments: EIP-1 anchor inactive");
+        require(IAssetRegistry(registry).isActive(assetAnchorId), "ExampleERC20WithDocuments: asset anchor inactive");
 
         // Demo bundle hashes still use placeholder document bytes, but the
-        // manifest shape, fields, sorting, and schema prefix are EIP-2 canonical.
+        // manifest shape, fields, sorting, and schema prefix are document-bundle canonical.
         string[] memory legalDocs = new string[](3);
         legalDocs[0] = "title-deed-v1.pdf";
         legalDocs[1] = "legal-opinion-v1.pdf";
@@ -68,7 +68,7 @@ contract ExampleERC20WithDocuments is Script {
 
         vm.startBroadcast(deployerKey);
 
-        // 1. Deploy EIP-2 DocumentBundleAnchor
+        // 1. Deploy DocumentBundleAnchor
         DocumentBundleAnchor anchor = new DocumentBundleAnchor(deployer);
         console.log("DocumentBundleAnchor:", address(anchor));
 
@@ -81,11 +81,11 @@ contract ExampleERC20WithDocuments is Script {
 
         vm.stopBroadcast();
 
-        // 3. Anchor legal basis documents (subjectId = EIP-1 assetAnchorId)
+        // 3. Anchor legal basis documents (subjectId = asset anchorId)
         vm.startBroadcast(complianceKey);
         anchor.anchorBundle(
             legalBundle,
-            assetAnchorId, // links this bundle to the EIP-1 asset
+            assetAnchorId, // links this bundle to the asset registry anchor
             ROLE_LEGAL_BASIS,
             3, // 3 documents: title deed, legal opinion, prospectus
             "ipfs://QmLegalBasisV1"
@@ -119,15 +119,15 @@ contract ExampleERC20WithDocuments is Script {
         require(allDocsPresent, "Both document bundles must be active");
         console.log("All required document bundles confirmed active.");
 
-        // 7. Show the asset anchor status from EIP-1 still applies
+        // 7. Show the asset anchor status from the asset registry still applies
         bool assetActive = IAssetRegistry(registry).isActive(assetAnchorId);
-        console.log("EIP-1 asset anchor active:", assetActive);
+        console.log("Asset registry anchor active:", assetActive);
 
         vm.stopBroadcast();
 
         console.log("");
         console.log("== Integration summary ==");
-        console.log("EIP-1 asset anchorId doubles as the EIP-2 subjectId.");
+        console.log("Asset registry anchorId doubles as the document bundle subjectId.");
         console.log("The verifier can be used by downstream contracts as:");
         console.log("  verifier.requireActiveBundle(assetAnchorId, ROLE_LEGAL_BASIS)");
         console.log("  verifier.requireActiveBundlesForAllRoles(assetAnchorId, roles)");
