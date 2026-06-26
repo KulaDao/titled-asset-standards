@@ -74,7 +74,7 @@ contract BundleHashLibTest is Test {
         );
 
         bytes32 hashWithV1 = keccak256(abi.encodePacked(BundleHashLib.SCHEMA_V1, leaf));
-        bytes32 hashWithV2 = keccak256(abi.encodePacked(keccak256("EIP-XXXX:BUNDLE:V2"), leaf));
+        bytes32 hashWithV2 = keccak256(abi.encodePacked(keccak256("ERC-XXXX:BUNDLE:V2"), leaf));
 
         assertEq(BundleHashLib.computeBundleHash(entries), hashWithV1, "library must use SCHEMA_V1");
         assertTrue(hashWithV1 != hashWithV2, "different schema versions must produce different hashes");
@@ -153,7 +153,7 @@ contract BundleHashLibTest is Test {
     }
 
     function test_profileConstants() public {
-        assertEq(BundleHashLib.SCHEMA_V1, keccak256("EIP-XXXX:BUNDLE:V1"), "SCHEMA_V1 constant mismatch");
+        assertEq(BundleHashLib.SCHEMA_V1, keccak256("ERC-XXXX:BUNDLE:V1"), "SCHEMA_V1 constant mismatch");
         assertEq(BundleHashLib.PROFILE_RAW, keccak256("NORM:RAW:V1"), "PROFILE_RAW constant mismatch");
         assertEq(
             BundleHashLib.PROFILE_JSON_RFC8785,

@@ -152,7 +152,7 @@ contract ComplianceEventLog is IComplianceEventLog {
         return indices[ordinal];
     }
 
-    function latestEventByType(bytes32 subjectId, bytes32 eventType) external view returns (uint256 eventIndex) {
+    function lastRecordedEventByType(bytes32 subjectId, bytes32 eventType) external view returns (uint256 eventIndex) {
         uint256[] storage indices = _eventsByType[subjectId][eventType];
         require(indices.length != 0, "ComplianceEventLog: no events for type");
         return indices[indices.length - 1];
