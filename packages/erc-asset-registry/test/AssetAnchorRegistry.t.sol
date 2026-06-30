@@ -553,6 +553,8 @@ contract AssetAnchorRegistryTest is Test {
         vm.prank(registrar);
         registry.bindToken(squattedAnchor, token, SCOPE_TOKEN_ID, 42);
 
+        vm.expectEmit(true, false, false, true);
+        emit AnchorDeactivated(squattedAnchor, "binding invalidated");
         vm.expectEmit(true, true, true, true);
         emit TokenBindingInvalidated(squattedAnchor, token, SCOPE_TOKEN_ID, 42, reasonHash);
         vm.prank(admin);
