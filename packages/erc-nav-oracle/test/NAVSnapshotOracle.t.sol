@@ -699,6 +699,42 @@ contract NAVSnapshotOracleTest {
         _assertEq(latest.nav, 110, "provider latest uses replacement correction");
     }
 
+    function test_invalidateSnapshotCorrectionOfCorrectionRestoresIntermediateAndAllowsReplacement() public {
+        uint256 original = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        uint256 firstCorrection = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, original);
+        uint256 secondCorrection = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 90, 2, T0, METHOD_2, firstCorrection);
+
+        vm.prank(ADMIN);
+        oracle.invalidateSnapshot(SUBJECT, USD, secondCorrection, keccak256("bad second correction"));
+
+        INAVSnapshotOracle.NAVSnapshot memory restoredIntermediate = oracle.getSnapshot(SUBJECT, USD, firstCorrection);
+        _assertEq(restoredIntermediate.correctedByIndex, 0, "intermediate restored as terminal");
+        _assertEq(
+            oracle.currentSnapshotIndex(SUBJECT, USD, original),
+            firstCorrection,
+            "original resolves to restored intermediate"
+        );
+        _assertTrue(oracle.isSnapshotCurrent(SUBJECT, USD, firstCorrection), "intermediate current");
+        _assertFalse(oracle.isSnapshotCurrent(SUBJECT, USD, secondCorrection), "invalidated terminal not current");
+
+        vm.prank(PROVIDER_A);
+        vm.expectRevert(bytes("NAVSnapshotOracle: target already corrected"));
+        oracle.publishNAV(SUBJECT, USD, PER_SHARE, 130, 2, T0, METHOD_2, "", original);
+
+        uint256 replacementCorrection =
+            _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 130, 2, T0, METHOD_2, firstCorrection);
+
+        _assertEq(replacementCorrection, 3, "replacement correction index");
+        _assertEq(
+            oracle.currentSnapshotIndex(SUBJECT, USD, original),
+            replacementCorrection,
+            "original resolves to replacement terminal"
+        );
+
+        INAVSnapshotOracle.NAVSnapshot memory latest = oracle.latestNAVByProvider(SUBJECT, USD, PROVIDER_A);
+        _assertEq(latest.nav, 130, "provider latest uses replacement terminal");
+    }
+
     function test_currentSnapshotIndexRejectsInvalidatedTerminal() public {
         uint256 original = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
 

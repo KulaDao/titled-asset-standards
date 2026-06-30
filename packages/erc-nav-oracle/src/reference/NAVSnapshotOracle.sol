@@ -214,6 +214,8 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         if (target.correctsIndex != NO_CORRECTION) {
             _snapshots[streamKey][target.correctsIndex].correctedByIndex = NO_CORRECTED_BY;
             replacementPlusOne = target.correctsIndex + 1;
+        } else {
+            replacementPlusOne = 0;
         }
 
         _invalidatedSnapshots[streamKey][snapshotIndex] = true;

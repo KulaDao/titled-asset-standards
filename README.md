@@ -40,6 +40,19 @@ These six standards are designed to compose: the `anchorId` returned by the asse
 
 ---
 
+## Admin Recovery Trust Model
+
+The reference implementations include narrowly scoped `DEFAULT_ADMIN_ROLE`
+recovery paths for disputed or orphaned state: asset-registry admins can
+invalidate token bindings, NAV-oracle admins can invalidate poisoned terminal
+snapshots, and document-bundle admins can supersede orphaned bundle slots. These
+paths preserve historical records and are intended for recovery from registrar,
+provider, or anchorer failure. A compromised admin can misuse them, so production
+deployments should protect admin keys with governance, multisig, timelocks, or
+equivalent operational controls.
+
+---
+
 ## Specification
 
 ### Asset-Bound Token Registry
