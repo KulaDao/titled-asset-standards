@@ -131,7 +131,10 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             require(params.correctsIndex < snapshotIndex, "NAVSnapshotOracle: correctsIndex out of range");
             NAVSnapshot storage target = _snapshots[streamKey][params.correctsIndex];
             require(target.correctedByIndex == NO_CORRECTED_BY, "NAVSnapshotOracle: target already corrected");
-            require(target.provider == msg.sender, "NAVSnapshotOracle: provider mismatch");
+            require(
+                target.provider == msg.sender || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
+                "NAVSnapshotOracle: provider mismatch"
+            );
             require(target.valuationTimestamp == params.valuationTimestamp, "NAVSnapshotOracle: valuation mismatch");
             require(target.navBasis == params.navBasis, "NAVSnapshotOracle: navBasis mismatch");
             require(

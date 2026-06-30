@@ -66,7 +66,9 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         require(_activeSlots[slotKey] == oldBundleHash, "DocumentBundleAnchor: old bundle not active for given slot");
 
         require(
-            old.anchoredBy == msg.sender || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
+            old.anchoredBy == msg.sender
+                || hasRole(DEFAULT_ADMIN_ROLE, msg.sender)
+                || !hasRole(ANCHOR_ROLE, old.anchoredBy),
             "DocumentBundleAnchor: not authorized to supersede"
         );
 

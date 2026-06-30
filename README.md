@@ -1,5 +1,5 @@
 ---
-EIP: titled-asset-standards
+Proposed ERC: titled-asset-standards
 Title: Titled Asset Standards — Composable ERC Specifications for Tokenized Asset Infrastructure
 Description: Six composable ERC specifications for on-chain asset registries, document anchoring, transfer governance, compliance logging, impact reporting, and NAV oracles.
 Discussions-To: https://ethereum-magicians.org

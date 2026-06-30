@@ -114,7 +114,7 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecy
     ///      registry. Plain ERC-20/721 tokens that don't implement the interface are allowed.
     function _requireTokenRegistryAgreement(address token) internal view {
         (bool ok, bytes memory data) = token.staticcall(abi.encodeWithSignature("anchorRegistry()"));
-        if (ok && data.length > 0) {
+        if (ok) {
             require(data.length >= 32, "AssetAnchorRegistry: token registry mismatch");
             address declared;
             assembly {
@@ -157,6 +157,25 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecy
         emit AnchorRegistered(anchorId, legalHash, evidenceHash);
     }
 
+    /// @notice Admin-only: clear the token binding for an anchor, freeing the squatted slot.
+    function clearTokenBinding(bytes32 anchorId) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        AnchorRecord storage rec = _records[anchorId];
+        require(rec.registeredAt != 0, "AssetAnchorRegistry: anchor not found");
+        require(rec.boundToken != address(0), "AssetAnchorRegistry: not bound");
+
+        bytes32 bindingKey = _tokenBindingKey(rec.boundToken, rec.bindingScope, rec.boundTokenId);
+        address token = rec.boundToken;
+        bytes32 bindingScope = rec.bindingScope;
+        uint256 tokenId = rec.boundTokenId;
+
+        _boundAnchorByTokenBinding[bindingKey] = bytes32(0);
+        rec.boundToken = address(0);
+        rec.bindingScope = bytes32(0);
+        rec.boundTokenId = 0;
+
+        emit TokenBindingCleared(anchorId, token, bindingScope, tokenId);
+    }
+
     /// @notice Permanently deactivates an anchor. Cannot be reversed by re-attestation.
     function deactivateAnchor(bytes32 anchorId, string calldata reason) external onlyRole(DEFAULT_ADMIN_ROLE) {
         AnchorRecord storage rec = _records[anchorId];
@@ -184,6 +203,7 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecy
 
         AnchorMetadataLib.AnchorMetadata storage meta = _metadata[anchorId];
         require(newExpiresAt >= meta.expiresAt, "AssetAnchorRegistry: new expiry before current");
+        require(newAttestationDate >= meta.attestationDate, "AssetAnchorRegistry: new attestation date before current");
         uint64 oldExpiresAt = meta.expiresAt;
         meta.expiresAt = newExpiresAt;
         meta.attestationDate = newAttestationDate;

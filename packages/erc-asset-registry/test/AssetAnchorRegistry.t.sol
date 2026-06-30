@@ -7,6 +7,8 @@ import {IAssetAnchorRegistry, IAssetAnchorRegistryLifecycle} from "../src/interf
 import {AssetRegistryConstants} from "../src/libraries/AssetRegistryConstants.sol";
 import {AnchorMetadataLib} from "../src/libraries/AnchorMetadataLib.sol";
 
+contract MockPlainToken {}
+
 contract MockBoundToken {
     address public anchorRegistry;
 
@@ -46,7 +48,7 @@ contract AssetAnchorRegistryTest is Test {
     address admin = address(0xA0);
     address registrar = address(0xA1);
     address other = address(0xA2);
-    address token = address(0xB0);
+    address token;
 
     bytes32 constant LEGAL_HASH = keccak256("legal-doc-1");
     bytes32 constant EVIDENCE_HASH = keccak256("evidence-doc-1");
@@ -59,6 +61,7 @@ contract AssetAnchorRegistryTest is Test {
 
     function setUp() public {
         registry = new AssetAnchorRegistry(admin);
+        token = address(new MockPlainToken());
         vm.startPrank(admin);
         registry.grantRole(registry.REGISTRAR_ROLE(), registrar);
         vm.stopPrank();

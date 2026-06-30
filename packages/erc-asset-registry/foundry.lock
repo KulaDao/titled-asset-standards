@@ -1,5 +1,17 @@
 {
+  "../erc-compliance-event-log/lib/forge-std": {
+    "rev": "c90c02ffa470b46d92ffaab093baeb296300870b"
+  },
   "../erc-document-bundle-anchor/lib/openzeppelin-contracts": {
+    "rev": "932fddf69a699a9a80fd2396fd1a2ab91cdda123"
+  },
+  "../erc-impact-snapshot/lib/forge-std": {
+    "rev": "c90c02ffa470b46d92ffaab093baeb296300870b"
+  },
+  "../erc-impact-snapshot/lib/openzeppelin-contracts": {
+    "rev": "932fddf69a699a9a80fd2396fd1a2ab91cdda123"
+  },
+  "../erc-transfer-domain/lib/openzeppelin-contracts": {
     "rev": "932fddf69a699a9a80fd2396fd1a2ab91cdda123"
   },
   "lib/openzeppelin-contracts": {
