@@ -38,7 +38,9 @@ interface IAssetAnchorRegistry {
         returns (bytes32 anchorId);
 
     /// @notice Bind a token contract to an existing, unbound anchor.
-    /// @dev Binding is permanent — reverts if the anchor is already bound.
+    /// @dev Binding fields are permanent — reverts if the anchor is already bound.
+    ///      IAssetAnchorRegistryRecovery may invalidate a binding's operational
+    ///      validity, but it MUST preserve the original binding fields.
     ///      Use the canonical contract binding scope for whole-contract binding and
     ///      the canonical token-ID binding scope for ERC-721/1155-style binding.
     ///      For contract scope, tokenId MUST be 0 as a canonical unused value.
@@ -69,6 +71,24 @@ interface IAssetAnchorRegistry {
     ///      SHOULD call isAnchorActive() on the token contract, not isBound() on the registry.
     ///      Reverts if anchorId does not exist in this registry.
     function isBound(bytes32 anchorId) external view returns (bool);
+}
+
+interface IAssetAnchorRegistryRecovery {
+    event TokenBindingInvalidated(
+        bytes32 indexed anchorId,
+        address indexed token,
+        bytes32 indexed bindingScope,
+        uint256 tokenId,
+        bytes32 reasonHash
+    );
+
+    /// @notice Permanently invalidate a disputed binding while preserving its record.
+    /// @dev Implementations MUST leave the anchor's binding fields unchanged, MUST make
+    ///      the anchor inactive, and MAY free the token-binding slot for a replacement anchor.
+    function invalidateTokenBinding(bytes32 anchorId, bytes32 reasonHash) external;
+
+    /// @notice Return true when the anchor is bound and its binding has not been invalidated.
+    function isBindingValid(bytes32 anchorId) external view returns (bool);
 }
 
 interface IAssetAnchorRegistryLifecycle {

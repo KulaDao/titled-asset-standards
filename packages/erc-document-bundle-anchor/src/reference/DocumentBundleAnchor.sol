@@ -19,6 +19,13 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         _grantRole(ANCHOR_ROLE, admin);
     }
 
+    modifier onlyAnchorOrAdmin() {
+        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            _checkRole(ANCHOR_ROLE, msg.sender);
+        }
+        _;
+    }
+
     /// @dev metadataURI is stored publicly on-chain. Do not include PII or sensitive content.
     /// @dev Caller must hold ANCHOR_ROLE at the time of the call.
     function anchorBundle(
@@ -42,8 +49,7 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         _anchor(bundleHash, subjectId, role, documentCount, metadataURI, tripleKey, slotKey);
     }
 
-    /// @dev Requires ANCHOR_ROLE at call time AND (original anchoredBy OR DEFAULT_ADMIN_ROLE).
-    /// @dev Admin supersede capability requires holding both DEFAULT_ADMIN_ROLE and ANCHOR_ROLE.
+    /// @dev Requires the original anchorer to retain ANCHOR_ROLE, or DEFAULT_ADMIN_ROLE for recovery.
     function supersedeBundle(
         bytes32 oldBundleHash,
         bytes32 newBundleHash,
@@ -51,7 +57,7 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         bytes32 role,
         uint256 documentCount,
         string calldata metadataURI
-    ) external onlyRole(ANCHOR_ROLE) {
+    ) external onlyAnchorOrAdmin {
         require(newBundleHash != bytes32(0), "DocumentBundleAnchor: zero newBundleHash");
         require(subjectId != bytes32(0), "DocumentBundleAnchor: zero subjectId");
         require(role != bytes32(0), "DocumentBundleAnchor: zero role");

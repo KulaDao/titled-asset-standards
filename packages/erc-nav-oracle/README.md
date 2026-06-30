@@ -8,7 +8,7 @@ median aggregation.
 
 | Interface | Purpose |
 |-----------|---------|
-| `INAVSnapshotOracle` | Publish, correct, and query NAV snapshots keyed by `(subjectId, currency)` |
+| `INAVSnapshotOracle` | Publish, correct, invalidate, and query NAV snapshots keyed by `(subjectId, currency)` |
 | `INAVAggregation` | Query deterministic median NAV across provider submissions |
 
 ## Key Semantics
@@ -25,6 +25,8 @@ median aggregation.
   Index `0` is safe as the corrected-by sentinel because a correction always has
   an index greater than the snapshot it corrects.
 - Corrections are fork-free. A snapshot can be corrected once, only by the original provider, and the correction must match the provider's latest snapshot for that valuation timestamp, target valuation timestamp, and configured NAV basis.
+- `DEFAULT_ADMIN_ROLE` can permanently invalidate a terminal snapshot when a provider is revoked or compromised. Invalidation preserves the snapshot record but excludes it from current-value, provider-latest, quorum, aggregation, and deviation calculations.
+- Invalidation requires a nonzero `reasonHash`, emits `NAVSnapshotInvalidated`, and recomputes latest-provider and latest-quorum pointers. Invalidated snapshots cannot be corrected or restored. Invalidating an original snapshot clears that provider's `(valuationTimestamp, provider)` slot so the provider can submit a replacement original at the same valuation timestamp. Invalidating a terminal correction restores the predecessor as the current terminal snapshot, allowing the provider to submit a replacement correction. For longer correction chains, invalidating the terminal restores only its direct predecessor; earlier corrected snapshots remain corrected unless their successor is also invalidated.
 - Correction-of-correction chains are allowed. Use
   `currentSnapshotIndex(subjectId, currency, snapshotIndex)` to resolve the
   terminal snapshot in a chain and `isSnapshotCurrent(subjectId, currency,
@@ -102,7 +104,7 @@ The reference implementation is dependency-free and includes minimal role contro
 
 | Role | Permissions |
 |------|-------------|
-| `DEFAULT_ADMIN_ROLE` | Grant and revoke roles |
+| `DEFAULT_ADMIN_ROLE` | Grant and revoke roles; invalidate poisoned or disputed snapshots |
 | `PROVIDER_ROLE` | Publish original NAV snapshots and corrections for its own snapshots |
 | `CONFIG_ROLE` | Set stream NAV basis, staleness configuration, and aggregation configuration |
 
@@ -151,3 +153,6 @@ once the ERC number is assigned and before any production deployment.
   accepting a NAV.
 - Aggregation reduces single-provider risk but does not prevent provider
   collusion or shared methodology errors.
+- Administrative invalidation recomputes stream, provider, and quorum pointers
+  in time linear to the stream history. Deployments with very long histories
+  should use bounded or checkpointed indexing in their production implementation.

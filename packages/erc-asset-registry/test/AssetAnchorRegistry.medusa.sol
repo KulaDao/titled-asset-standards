@@ -13,6 +13,7 @@ import {AnchorMetadataLib} from "../src/libraries/AnchorMetadataLib.sol";
 ///        property_bindingIsImmutable
 ///        property_deactivatedAnchorStaysDeactivated
 ///        property_reattestDoesNotMutateImmutableFields
+///        property_invalidatedBindingsAreNotValid
 contract AssetAnchorRegistryFuzzTest {
     AssetAnchorRegistry internal registry;
 
@@ -27,6 +28,7 @@ contract AssetAnchorRegistryFuzzTest {
     mapping(bytes32 => bytes32) internal legalHashOf;
     mapping(bytes32 => bytes32) internal evidenceHashOf;
     mapping(bytes32 => bool) internal wasDeactivated;
+    mapping(bytes32 => bool) internal bindingInvalidated;
     mapping(bytes32 => bytes32) internal anchorByTokenBinding;
 
     bytes32 internal constant ASSET_CLASS_EQUITY = keccak256("ERC-XXXX:ASSET_CLASS:EQUITY");
@@ -97,6 +99,21 @@ contract AssetAnchorRegistryFuzzTest {
         } catch {}
     }
 
+    function fuzz_invalidateTokenBinding(uint256 anchorIdx, bytes32 reasonHash) external {
+        if (anchorIds.length == 0) return;
+        bytes32 anchorId = anchorIds[anchorIdx % anchorIds.length];
+        if (boundTokenOf[anchorId] == address(0) || bindingInvalidated[anchorId]) return;
+        if (reasonHash == bytes32(0)) reasonHash = keccak256("medusa invalidation");
+
+        try registry.invalidateTokenBinding{gas: 150_000}(anchorId, reasonHash) {
+            bindingInvalidated[anchorId] = true;
+            wasDeactivated[anchorId] = true;
+            bytes32 bindingKey =
+                keccak256(abi.encode(boundTokenOf[anchorId], boundBindingScopeOf[anchorId], boundTokenIdOf[anchorId]));
+            anchorByTokenBinding[bindingKey] = bytes32(0);
+        } catch {}
+    }
+
     function fuzz_reattest(uint256 anchorIdx, uint64 extraDays) external {
         if (anchorIds.length == 0) return;
         if (extraDays == 0) extraDays = 1;
@@ -113,7 +130,7 @@ contract AssetAnchorRegistryFuzzTest {
         for (uint256 i = 0; i < anchorIds.length; i++) {
             bytes32 ai = anchorIds[i];
             address bt = boundTokenOf[ai];
-            if (bt == address(0)) continue;
+            if (bt == address(0) || bindingInvalidated[ai]) continue;
 
             uint256 bid = boundTokenIdOf[ai];
             bytes32 scope = boundBindingScopeOf[ai];
@@ -167,6 +184,16 @@ contract AssetAnchorRegistryFuzzTest {
                 if (rec.bindingScope != boundBindingScopeOf[ai]) return false;
                 if (rec.boundTokenId != boundTokenIdOf[ai]) return false;
             }
+        }
+        return true;
+    }
+
+    /// Invalidated bindings are preserved historically but no longer valid.
+    function property_invalidatedBindingsAreNotValid() external view returns (bool) {
+        for (uint256 i = 0; i < anchorIds.length; i++) {
+            bytes32 ai = anchorIds[i];
+            if (!bindingInvalidated[ai]) continue;
+            if (registry.isBindingValid(ai)) return false;
         }
         return true;
     }

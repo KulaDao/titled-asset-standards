@@ -3,15 +3,27 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {AssetAnchorRegistry} from "../src/reference/AssetAnchorRegistry.sol";
-import {IAssetAnchorRegistry, IAssetAnchorRegistryLifecycle} from "../src/interfaces/IAssetAnchorRegistry.sol";
+import {
+    IAssetAnchorRegistry,
+    IAssetAnchorRegistryLifecycle,
+    IAssetAnchorRegistryRecovery
+} from "../src/interfaces/IAssetAnchorRegistry.sol";
 import {AssetRegistryConstants} from "../src/libraries/AssetRegistryConstants.sol";
 import {AnchorMetadataLib} from "../src/libraries/AnchorMetadataLib.sol";
+
+contract MockPlainToken {}
 
 contract MockBoundToken {
     address public anchorRegistry;
 
     constructor(address registry) {
         anchorRegistry = registry;
+    }
+}
+
+contract MockEmptyAnchorRegistryReturn {
+    fallback(bytes calldata) external returns (bytes memory) {
+        return bytes("");
     }
 }
 
@@ -36,6 +48,13 @@ contract MockTrailingAnchorRegistryReturn {
 contract AssetAnchorRegistryTest is Test {
     event AnchorRegistered(bytes32 indexed anchorId, bytes32 legalHash, bytes32 evidenceHash);
     event TokenBound(bytes32 indexed anchorId, address indexed token, bytes32 indexed bindingScope, uint256 tokenId);
+    event TokenBindingInvalidated(
+        bytes32 indexed anchorId,
+        address indexed token,
+        bytes32 indexed bindingScope,
+        uint256 tokenId,
+        bytes32 reasonHash
+    );
     event AnchorDeactivated(bytes32 indexed anchorId, string reason);
     event AnchorReattested(
         bytes32 indexed anchorId, uint64 oldExpiresAt, uint64 newExpiresAt, uint64 newAttestationDate
@@ -46,7 +65,7 @@ contract AssetAnchorRegistryTest is Test {
     address admin = address(0xA0);
     address registrar = address(0xA1);
     address other = address(0xA2);
-    address token = address(0xB0);
+    address token;
 
     bytes32 constant LEGAL_HASH = keccak256("legal-doc-1");
     bytes32 constant EVIDENCE_HASH = keccak256("evidence-doc-1");
@@ -59,6 +78,7 @@ contract AssetAnchorRegistryTest is Test {
 
     function setUp() public {
         registry = new AssetAnchorRegistry(admin);
+        token = address(new MockPlainToken());
         vm.startPrank(admin);
         registry.grantRole(registry.REGISTRAR_ROLE(), registrar);
         vm.stopPrank();
@@ -261,6 +281,16 @@ contract AssetAnchorRegistryTest is Test {
         vm.prank(registrar);
         vm.expectRevert("AssetAnchorRegistry: token registry mismatch");
         registry.bindToken(anchorId, malformedToken, SCOPE_CONTRACT, 0);
+    }
+
+    function test_bindToken_revertsSuccessfulEmptyAnchorRegistryReturnData() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+
+        address emptyReturnToken = address(new MockEmptyAnchorRegistryReturn());
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: token registry mismatch");
+        registry.bindToken(anchorId, emptyReturnToken, SCOPE_CONTRACT, 0);
     }
 
     function test_bindToken_emitsTokenBound() public {
@@ -513,14 +543,78 @@ contract AssetAnchorRegistryTest is Test {
         assertTrue(registry.isBound(anchorId), "isBound must remain true after deactivation");
     }
 
+    // ─── binding recovery ─────────────────────────────────────────────
+
+    function test_invalidateTokenBindingPreservesHistoryAndFreesSlot() public {
+        bytes32 reasonHash = keccak256("registrar binding-key squatting");
+
+        vm.prank(registrar);
+        bytes32 squattedAnchor = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        vm.prank(registrar);
+        registry.bindToken(squattedAnchor, token, SCOPE_TOKEN_ID, 42);
+
+        vm.expectEmit(true, false, false, true);
+        emit AnchorDeactivated(squattedAnchor, "binding invalidated");
+        vm.expectEmit(true, true, true, true);
+        emit TokenBindingInvalidated(squattedAnchor, token, SCOPE_TOKEN_ID, 42, reasonHash);
+        vm.prank(admin);
+        registry.invalidateTokenBinding(squattedAnchor, reasonHash);
+
+        IAssetAnchorRegistry.AnchorRecord memory historical = registry.getAnchor(squattedAnchor);
+        assertEq(historical.boundToken, token, "historical token changed");
+        assertEq(historical.bindingScope, SCOPE_TOKEN_ID, "historical scope changed");
+        assertEq(historical.boundTokenId, 42, "historical tokenId changed");
+        assertFalse(historical.active, "invalidated anchor remains active");
+        assertTrue(registry.isBound(squattedAnchor), "historical binding must remain queryable");
+        assertFalse(registry.isBindingValid(squattedAnchor), "invalidated binding reported valid");
+
+        address otherToken = address(new MockPlainToken());
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: already bound");
+        registry.bindToken(squattedAnchor, otherToken, SCOPE_CONTRACT, 0);
+
+        vm.prank(registrar);
+        bytes32 replacementAnchor = registry.registerAnchor(LEGAL_HASH_2, EVIDENCE_HASH_2, _validMetadata(2_000_000));
+        vm.prank(registrar);
+        registry.bindToken(replacementAnchor, token, SCOPE_TOKEN_ID, 42);
+
+        assertTrue(registry.isBindingValid(replacementAnchor), "replacement binding not valid");
+        assertEq(registry.getAnchor(replacementAnchor).boundToken, token, "replacement token mismatch");
+    }
+
+    function test_invalidateTokenBindingRejectsUnauthorizedAndInvalidRequests() public {
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(2_000_000));
+        vm.prank(registrar);
+        registry.bindToken(anchorId, token, SCOPE_CONTRACT, 0);
+
+        vm.prank(other);
+        vm.expectRevert();
+        registry.invalidateTokenBinding(anchorId, keccak256("unauthorized"));
+
+        vm.prank(admin);
+        vm.expectRevert("AssetAnchorRegistry: zero reasonHash");
+        registry.invalidateTokenBinding(anchorId, bytes32(0));
+
+        vm.prank(admin);
+        registry.invalidateTokenBinding(anchorId, keccak256("invalid"));
+
+        vm.prank(admin);
+        vm.expectRevert("AssetAnchorRegistry: binding already invalidated");
+        registry.invalidateTokenBinding(anchorId, keccak256("again"));
+    }
+
     // ─── ERC-165 ──────────────────────────────────────────────────────
 
-    function test_supportsInterface_baseAndLifecycle() public view {
+    function test_supportsInterface_baseLifecycleAndRecovery() public view {
         assertTrue(
             registry.supportsInterface(type(IAssetAnchorRegistry).interfaceId), "missing base registry interface"
         );
         assertTrue(
             registry.supportsInterface(type(IAssetAnchorRegistryLifecycle).interfaceId), "missing lifecycle interface"
+        );
+        assertTrue(
+            registry.supportsInterface(type(IAssetAnchorRegistryRecovery).interfaceId), "missing recovery interface"
         );
         assertFalse(registry.supportsInterface(0xffffffff), "unexpected invalid interface support");
     }
@@ -666,6 +760,20 @@ contract AssetAnchorRegistryTest is Test {
         vm.prank(registrar);
         vm.expectRevert("AssetAnchorRegistry: new expiry before current");
         registry.reattest(anchorId, 2_000_000, uint64(500_000));
+    }
+
+    function test_reattest_revertsOlderAttestationDate() public {
+        vm.warp(500_000);
+        vm.prank(registrar);
+        bytes32 anchorId = registry.registerAnchor(LEGAL_HASH, EVIDENCE_HASH, _validMetadata(1_000_000));
+
+        vm.prank(registrar);
+        registry.reattest(anchorId, 2_000_000, uint64(500_000));
+
+        vm.warp(600_000);
+        vm.prank(registrar);
+        vm.expectRevert("AssetAnchorRegistry: new attestation date before current");
+        registry.reattest(anchorId, 3_000_000, uint64(400_000));
     }
 
     function test_reattest_emitsAnchorReattested() public {
