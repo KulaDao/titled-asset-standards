@@ -88,6 +88,12 @@ rather than sharing a zero namespace.
 | `DEFAULT_ADMIN_ROLE` | `0x00` | Grant/revoke roles, supersede any anchor |
 | `ANCHOR_ROLE` | `keccak256("ANCHOR")` | Anchor new bundles, supersede own anchors |
 
+`DEFAULT_ADMIN_ROLE` can supersede an active bundle even when the original
+anchorer has lost `ANCHOR_ROLE`. This is an explicit orphaned-slot recovery
+path. It does not let arbitrary `ANCHOR_ROLE` holders take over another
+anchorer's slot; non-admin callers must be the original anchorer and still hold
+`ANCHOR_ROLE`.
+
 ## Consumer Verification
 
 ```solidity

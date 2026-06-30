@@ -472,4 +472,26 @@ contract DocumentBundleAnchorTest is Test {
         assertTrue(old.superseded, "old bundle must be superseded");
         assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_2, "active slot must use replacement");
     }
+
+    function test_supersedeBundle_adminRecoversOrphanedSlotAfterOriginalAnchorerRevoked() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+
+        bytes32 anchorRole = anchor.ANCHOR_ROLE();
+        vm.startPrank(admin);
+        anchor.revokeRole(anchorRole, anchorUser);
+        anchor.revokeRole(anchorRole, admin);
+        vm.stopPrank();
+
+        vm.prank(admin);
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2-admin-recovery");
+
+        IDocumentBundleAnchor.AnchorRecord memory old = anchor.getAnchor(BUNDLE_1, SUBJECT_A, ROLE_1);
+        IDocumentBundleAnchor.AnchorRecord memory replacement = anchor.getAnchor(BUNDLE_2, SUBJECT_A, ROLE_1);
+
+        assertTrue(old.superseded, "orphaned bundle must be superseded");
+        assertEq(old.supersededBy, BUNDLE_2, "orphaned bundle must point to replacement");
+        assertEq(replacement.anchoredBy, admin, "admin must be replacement anchorer");
+        assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_2, "active slot must use admin replacement");
+    }
 }

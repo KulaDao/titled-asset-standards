@@ -112,7 +112,9 @@ interface INAVSnapshotOracle {
         returns (NAVSnapshot memory);
 
     /// @notice Resolve the terminal snapshot in a correction chain.
-    /// @dev MUST revert if snapshotIndex >= snapshotCount. Follows correctedByIndex until it reaches 0.
+    /// @dev MUST revert if snapshotIndex >= snapshotCount or the resolved terminal
+    ///      snapshot has been invalidated and no current terminal remains.
+    ///      Follows correctedByIndex until it reaches NO_CORRECTED_BY.
     function currentSnapshotIndex(bytes32 subjectId, bytes32 currency, uint256 snapshotIndex)
         external
         view

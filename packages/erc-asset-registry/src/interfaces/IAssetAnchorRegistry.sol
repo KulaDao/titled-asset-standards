@@ -38,7 +38,9 @@ interface IAssetAnchorRegistry {
         returns (bytes32 anchorId);
 
     /// @notice Bind a token contract to an existing, unbound anchor.
-    /// @dev Binding is permanent — reverts if the anchor is already bound.
+    /// @dev Binding fields are permanent — reverts if the anchor is already bound.
+    ///      IAssetAnchorRegistryRecovery may invalidate a binding's operational
+    ///      validity, but it MUST preserve the original binding fields.
     ///      Use the canonical contract binding scope for whole-contract binding and
     ///      the canonical token-ID binding scope for ERC-721/1155-style binding.
     ///      For contract scope, tokenId MUST be 0 as a canonical unused value.

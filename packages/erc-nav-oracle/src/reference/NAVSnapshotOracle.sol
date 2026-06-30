@@ -125,6 +125,9 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
 
         snapshotIndex = _snapshots[streamKey].length;
         uint256 existingPlusOne = _providerTimestampSnapshotPlusOne[streamKey][params.valuationTimestamp][msg.sender];
+        if (existingPlusOne != 0 && _invalidatedSnapshots[streamKey][existingPlusOne - 1]) {
+            existingPlusOne = 0;
+        }
 
         if (params.correctsIndex == NO_CORRECTION) {
             require(existingPlusOne == 0, "NAVSnapshotOracle: duplicate submission");
@@ -207,7 +210,14 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         require(target.correctedByIndex == NO_CORRECTED_BY, "NAVSnapshotOracle: snapshot not current");
         require(!_invalidatedSnapshots[streamKey][snapshotIndex], "NAVSnapshotOracle: already invalidated");
 
+        uint256 replacementPlusOne;
+        if (target.correctsIndex != NO_CORRECTION) {
+            _snapshots[streamKey][target.correctsIndex].correctedByIndex = NO_CORRECTED_BY;
+            replacementPlusOne = target.correctsIndex + 1;
+        }
+
         _invalidatedSnapshots[streamKey][snapshotIndex] = true;
+        _providerTimestampSnapshotPlusOne[streamKey][target.valuationTimestamp][target.provider] = replacementPlusOne;
         _recomputeLatestPointers(streamKey, target.provider);
         _recomputeLatestEligibleTimestamp(streamKey);
 
@@ -326,6 +336,7 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             current = next;
             next = _snapshots[streamKey][current].correctedByIndex;
         }
+        require(_isEligibleTerminalSnapshot(streamKey, current), "NAVSnapshotOracle: no current snapshot");
         return current;
     }
 

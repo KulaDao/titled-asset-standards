@@ -26,7 +26,7 @@ median aggregation.
   an index greater than the snapshot it corrects.
 - Corrections are fork-free. A snapshot can be corrected once, only by the original provider, and the correction must match the provider's latest snapshot for that valuation timestamp, target valuation timestamp, and configured NAV basis.
 - `DEFAULT_ADMIN_ROLE` can permanently invalidate a terminal snapshot when a provider is revoked or compromised. Invalidation preserves the snapshot record but excludes it from current-value, provider-latest, quorum, aggregation, and deviation calculations.
-- Invalidation requires a nonzero `reasonHash`, emits `NAVSnapshotInvalidated`, and recomputes latest-provider and latest-quorum pointers. Invalidated snapshots cannot be corrected or restored.
+- Invalidation requires a nonzero `reasonHash`, emits `NAVSnapshotInvalidated`, and recomputes latest-provider and latest-quorum pointers. Invalidated snapshots cannot be corrected or restored. Invalidating an original snapshot clears that provider's `(valuationTimestamp, provider)` slot so the provider can submit a replacement original at the same valuation timestamp. Invalidating a terminal correction restores the predecessor as the current terminal snapshot, allowing the provider to submit a replacement correction.
 - Correction-of-correction chains are allowed. Use
   `currentSnapshotIndex(subjectId, currency, snapshotIndex)` to resolve the
   terminal snapshot in a chain and `isSnapshotCurrent(subjectId, currency,

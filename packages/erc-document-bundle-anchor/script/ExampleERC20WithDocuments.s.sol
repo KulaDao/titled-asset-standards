@@ -9,6 +9,7 @@ import {BundleHashLib} from "../src/libraries/BundleHashLib.sol";
 /// @notice Minimal asset registry interface — only what this script needs.
 interface IAssetRegistry {
     function isActive(bytes32 anchorId) external view returns (bool);
+    function isBindingValid(bytes32 anchorId) external view returns (bool);
 }
 
 /// @title  ExampleERC20WithDocuments
@@ -48,6 +49,9 @@ contract ExampleERC20WithDocuments is Script {
         address compliance = vm.addr(complianceKey);
 
         require(IAssetRegistry(registry).isActive(assetAnchorId), "ExampleERC20WithDocuments: asset anchor inactive");
+        require(
+            IAssetRegistry(registry).isBindingValid(assetAnchorId), "ExampleERC20WithDocuments: asset binding invalid"
+        );
 
         // Demo bundle hashes still use placeholder document bytes, but the
         // manifest shape, fields, sorting, and schema prefix are document-bundle canonical.
@@ -121,7 +125,9 @@ contract ExampleERC20WithDocuments is Script {
 
         // 7. Show the asset anchor status from the asset registry still applies
         bool assetActive = IAssetRegistry(registry).isActive(assetAnchorId);
+        bool bindingValid = IAssetRegistry(registry).isBindingValid(assetAnchorId);
         console.log("Asset registry anchor active:", assetActive);
+        console.log("Asset registry binding valid:", bindingValid);
 
         vm.stopBroadcast();
 

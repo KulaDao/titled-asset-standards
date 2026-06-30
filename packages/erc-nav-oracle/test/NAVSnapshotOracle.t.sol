@@ -648,6 +648,68 @@ contract NAVSnapshotOracleTest {
         _assertEq(providerLatest.nav, 100, "provider latest falls back");
     }
 
+    function test_invalidateSnapshotAllowsProviderToRepublishSameTimestamp() public {
+        uint256 invalidatedIndex = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.prank(ADMIN);
+        oracle.invalidateSnapshot(SUBJECT, USD, invalidatedIndex, keccak256("bad original"));
+
+        uint256 replacementIndex = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 105, 2, T0, METHOD_2, NO_CORRECTION);
+
+        _assertEq(replacementIndex, 1, "replacement index");
+        _assertFalse(oracle.isSnapshotCurrent(SUBJECT, USD, invalidatedIndex), "invalidated original not current");
+        _assertTrue(oracle.isSnapshotCurrent(SUBJECT, USD, replacementIndex), "replacement current");
+
+        (int256 latestNav,,,,,) = oracle.latestNAV(SUBJECT, USD);
+        _assertEq(latestNav, 105, "latest uses replacement");
+
+        INAVSnapshotOracle.NAVSnapshot memory providerLatest = oracle.latestNAVByProvider(SUBJECT, USD, PROVIDER_A);
+        _assertEq(providerLatest.nav, 105, "provider latest uses replacement");
+    }
+
+    function test_invalidateSnapshotCorrectionRestoresPredecessorAndAllowsNewCorrection() public {
+        uint256 original = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        uint256 rejectedCorrection = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 90, 2, T0, METHOD_2, original);
+
+        vm.prank(ADMIN);
+        oracle.invalidateSnapshot(SUBJECT, USD, rejectedCorrection, keccak256("bad correction"));
+
+        INAVSnapshotOracle.NAVSnapshot memory restoredOriginal = oracle.getSnapshot(SUBJECT, USD, original);
+        _assertEq(restoredOriginal.correctedByIndex, 0, "original restored as terminal");
+        _assertTrue(oracle.isSnapshotCurrent(SUBJECT, USD, original), "original current after correction invalidated");
+        _assertFalse(
+            oracle.isSnapshotCurrent(SUBJECT, USD, rejectedCorrection), "invalidated correction is not current"
+        );
+        _assertEq(
+            oracle.currentSnapshotIndex(SUBJECT, USD, original), original, "current resolves to restored original"
+        );
+        vm.expectRevert(bytes("NAVSnapshotOracle: no current snapshot"));
+        oracle.currentSnapshotIndex(SUBJECT, USD, rejectedCorrection);
+
+        uint256 replacementCorrection = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, original);
+
+        _assertEq(replacementCorrection, 2, "replacement correction index");
+        _assertEq(
+            oracle.currentSnapshotIndex(SUBJECT, USD, original),
+            replacementCorrection,
+            "current resolves to replacement correction"
+        );
+
+        INAVSnapshotOracle.NAVSnapshot memory latest = oracle.latestNAVByProvider(SUBJECT, USD, PROVIDER_A);
+        _assertEq(latest.nav, 110, "provider latest uses replacement correction");
+    }
+
+    function test_currentSnapshotIndexRejectsInvalidatedTerminal() public {
+        uint256 original = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.prank(ADMIN);
+        oracle.invalidateSnapshot(SUBJECT, USD, original, keccak256("bad original"));
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: no current snapshot"));
+        oracle.currentSnapshotIndex(SUBJECT, USD, original);
+        _assertFalse(oracle.isSnapshotCurrent(SUBJECT, USD, original), "invalidated terminal not current");
+    }
+
     function test_invalidateSnapshotRejectsUnauthorizedAndInvalidStates() public {
         uint256 original = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
 

@@ -124,6 +124,12 @@ if (record.bindingScope == BINDING_SCOPE_CONTRACT) {
 
 The registry enforces the registry-side of this check at bind time (`anchorRegistry()` must equal `address(this)` if declared). The token-side `anchorId()` / `anchorIdOf()` check is the caller's responsibility.
 
+`deactivateAnchor()` changes lifecycle activity only. It does not free a
+token-binding slot. When an admin needs to remove a disputed or squatted token
+binding from operational use and allow a replacement anchor to bind the same
+`(token, bindingScope, tokenId)`, they must call `invalidateTokenBinding()`.
+Historical binding fields remain readable after invalidation.
+
 ## Build & Test
 
 ```bash
