@@ -117,6 +117,21 @@ contract DocumentBundleAnchorTest is Test {
         anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 1, "");
     }
 
+    function test_supersedeBundle_otherRoleHolderCannotTakeOverRevokedAnchorerSlot() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+
+        bytes32 anchorRole = anchor.ANCHOR_ROLE();
+        vm.startPrank(admin);
+        anchor.grantRole(anchorRole, other);
+        anchor.revokeRole(anchorRole, anchorUser);
+        vm.stopPrank();
+
+        vm.prank(other);
+        vm.expectRevert("DocumentBundleAnchor: not authorized to supersede");
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "takeover");
+    }
+
     function test_supersedeBundle_adminCanSupersede() public {
         vm.prank(anchorUser);
         anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
@@ -442,7 +457,7 @@ contract DocumentBundleAnchorTest is Test {
         assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_1, "active slot must not change");
     }
 
-    function test_supersedeBundle_adminWithoutAnchorRoleCannotSupersede() public {
+    function test_supersedeBundle_adminWithoutAnchorRoleCanRecoverSlot() public {
         vm.prank(anchorUser);
         anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
 
@@ -451,11 +466,10 @@ contract DocumentBundleAnchorTest is Test {
         anchor.revokeRole(anchorRole, admin);
 
         vm.prank(admin);
-        vm.expectRevert(abi.encodeWithSelector(ACCESS_CONTROL_UNAUTHORIZED, admin, anchorRole));
         anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2");
 
         IDocumentBundleAnchor.AnchorRecord memory old = anchor.getAnchor(BUNDLE_1, SUBJECT_A, ROLE_1);
-        assertFalse(old.superseded, "old bundle must remain active");
-        assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_1, "active slot must not change");
+        assertTrue(old.superseded, "old bundle must be superseded");
+        assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_2, "active slot must use replacement");
     }
 }

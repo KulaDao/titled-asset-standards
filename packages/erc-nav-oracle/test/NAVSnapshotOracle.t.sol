@@ -41,6 +41,15 @@ contract NAVSnapshotOracleTest {
 
     event NAVBasisConfigured(bytes32 indexed subjectId, bytes32 indexed currency, bytes32 navBasis);
 
+    event NAVSnapshotInvalidated(
+        bytes32 indexed subjectId,
+        bytes32 indexed currency,
+        address indexed provider,
+        uint256 snapshotIndex,
+        address invalidatedBy,
+        bytes32 reasonHash
+    );
+
     event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
     event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
 
@@ -600,6 +609,80 @@ contract NAVSnapshotOracleTest {
         vm.expectEmit(true, true, false, true);
         emit NAVDeviationDetected(SUBJECT, USD, T0, normalizedMin, huge, type(uint256).max);
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, huge, 18, T0, METHOD_1, NO_CORRECTION);
+    }
+
+    function test_adminInvalidationEvictsRevokedProviderAndFallsBackToPriorQuorum() public {
+        bytes32 reasonHash = keccak256("revoked provider poisoned snapshot");
+
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_1, NO_CORRECTION);
+        uint256 poisonedIndex = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 1_000, 2, T1, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 120, 2, T1, METHOD_1, NO_CORRECTION);
+
+        bytes32 providerRole = oracle.PROVIDER_ROLE();
+        vm.prank(ADMIN);
+        oracle.revokeRole(providerRole, PROVIDER_A);
+
+        vm.expectEmit(true, true, true, true);
+        emit NAVSnapshotInvalidated(SUBJECT, USD, PROVIDER_A, poisonedIndex, ADMIN, reasonHash);
+        vm.prank(ADMIN);
+        oracle.invalidateSnapshot(SUBJECT, USD, poisonedIndex, reasonHash);
+
+        _assertTrue(oracle.isSnapshotInvalidated(SUBJECT, USD, poisonedIndex), "snapshot invalidated");
+        _assertFalse(oracle.isSnapshotCurrent(SUBJECT, USD, poisonedIndex), "invalidated snapshot not current");
+        _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T0, "aggregation falls back to prior quorum");
+        _assertEq(oracle.providerSubmissionCount(SUBJECT, USD), 2, "prior quorum provider count");
+
+        (int256 aggregatedNav,,, uint64 valuationTimestamp, uint256 providerCount,,) =
+            oracle.aggregatedNAV(SUBJECT, USD);
+        _assertEq(aggregatedNav, 100, "prior quorum median");
+        _assertEq(valuationTimestamp, T0, "prior quorum timestamp");
+        _assertEq(providerCount, 2, "aggregation provider count");
+
+        INAVSnapshotOracle.NAVSnapshot memory providerLatest = oracle.latestNAVByProvider(SUBJECT, USD, PROVIDER_A);
+        _assertEq(providerLatest.nav, 100, "provider latest falls back");
+    }
+
+    function test_invalidateSnapshotRejectsUnauthorizedAndInvalidStates() public {
+        uint256 original = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.prank(PROVIDER_B);
+        vm.expectRevert(bytes("NAVSnapshotOracle: missing role"));
+        oracle.invalidateSnapshot(SUBJECT, USD, original, keccak256("unauthorized"));
+
+        vm.prank(ADMIN);
+        vm.expectRevert(bytes("NAVSnapshotOracle: zero reasonHash"));
+        oracle.invalidateSnapshot(SUBJECT, USD, original, bytes32(0));
+
+        vm.prank(ADMIN);
+        oracle.invalidateSnapshot(SUBJECT, USD, original, keccak256("invalid"));
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: no snapshots"));
+        oracle.latestNAV(SUBJECT, USD);
+        vm.expectRevert(bytes("NAVSnapshotOracle: no provider snapshot"));
+        oracle.latestNAVByProvider(SUBJECT, USD, PROVIDER_A);
+
+        vm.prank(ADMIN);
+        vm.expectRevert(bytes("NAVSnapshotOracle: already invalidated"));
+        oracle.invalidateSnapshot(SUBJECT, USD, original, keccak256("again"));
+
+        vm.prank(PROVIDER_A);
+        vm.expectRevert(bytes("NAVSnapshotOracle: target invalidated"));
+        oracle.publishNAV(SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, "", original);
+    }
+
+    function test_invalidateSnapshotRejectsCorrectedSnapshot() public {
+        uint256 original = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, original);
+
+        vm.prank(ADMIN);
+        vm.expectRevert(bytes("NAVSnapshotOracle: snapshot not current"));
+        oracle.invalidateSnapshot(SUBJECT, USD, original, keccak256("superseded"));
     }
 
     function test_deriveTokenCurrencyUsesChainAndTokenDomain() public pure {

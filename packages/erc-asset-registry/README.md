@@ -8,6 +8,7 @@ On-chain registry that binds a dual-hash anchor (legal + evidence document commi
 |-----------|---------|
 | `IAssetAnchorRegistry` | Registry operations: register, bind, query |
 | `IAssetAnchorRegistryLifecycle` | Metadata, active-status, re-attestation, and deactivation extension |
+| `IAssetAnchorRegistryRecovery` | Admin recovery for disputed or squatted bindings with preserved history |
 | `IAssetBoundToken` | Token-side view for whole-contract bindings |
 | `IAssetBoundTokenId` | Token-side view for per-token-ID bindings |
 
@@ -34,6 +35,15 @@ function isBound(bytes32 anchorId) external view returns (bool);
 ```
 
 `anchorId = keccak256(abi.encode(legalHash, evidenceHash))` — deterministic, doubles as duplicate detection.
+
+### `IAssetAnchorRegistryRecovery`
+
+```solidity
+function invalidateTokenBinding(bytes32 anchorId, bytes32 reasonHash) external;
+function isBindingValid(bytes32 anchorId) external view returns (bool);
+```
+
+Binding invalidation is an admin-only recovery mechanism for registrar compromise or binding-key squatting. It permanently deactivates the disputed anchor and frees its token-binding slot, but does not erase or mutate the original `boundToken`, `bindingScope`, or `boundTokenId`. The invalidated anchor remains historically queryable and cannot be rebound.
 
 ### `IAssetAnchorRegistryLifecycle`
 
@@ -65,7 +75,7 @@ anchors instead of returning `false`, matching `getAnchor()` and `getMetadata()`
 **Binding** creates a permanent, immutable link between an anchor and a `(token, bindingScope, tokenId)` tuple:
 - Only possible while the anchor is active and unexpired
 - Only the original registrar while it still holds `REGISTRAR_ROLE`, or `DEFAULT_ADMIN_ROLE`, can bind
-- Each `(token, bindingScope, tokenId)` tuple can be bound to at most one anchor in a given registry
+- Each `(token, bindingScope, tokenId)` tuple can have at most one valid binding in a given registry; invalidated historical bindings remain queryable
 - `isBound()` returns `true` even after the anchor is deactivated or expired and reverts for nonexistent anchors
 
 Re-attestation can extend or preserve an anchor's expiry, but the reference
@@ -87,7 +97,7 @@ For whole-contract binding, use `BINDING_SCOPE_CONTRACT` with `tokenId = 0` as t
 
 | Role | Selector constant | Permissions |
 |------|-------------------|-------------|
-| `DEFAULT_ADMIN_ROLE` | `0x00` | Grant/revoke roles, deactivate anchors, bind any anchor, re-attest any anchor |
+| `DEFAULT_ADMIN_ROLE` | `0x00` | Grant/revoke roles, deactivate anchors, bind any anchor, re-attest any anchor, invalidate disputed bindings |
 | `REGISTRAR_ROLE` | `keccak256("REGISTRAR")` | Register anchors, bind own anchors while role is active, re-attest own anchors while role is active |
 
 ## Consumer Verification
@@ -100,6 +110,7 @@ IAssetAnchorRegistry.AnchorRecord memory record = registry.getAnchor(anchorId);
 bool active = IAssetAnchorRegistryLifecycle(address(registry)).isActive(anchorId);
 require(record.anchorId == anchorId);
 require(active);
+require(IAssetAnchorRegistryRecovery(address(registry)).isBindingValid(anchorId));
 
 // 2. Token side — token declares agreement when it implements a token-side interface
 if (record.bindingScope == BINDING_SCOPE_CONTRACT) {

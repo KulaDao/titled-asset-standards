@@ -56,12 +56,24 @@ interface IAssetAnchorRegistry {
         bytes calldata metadata
     ) external returns (bytes32 anchorId);
 
-    function bindToken(bytes32 anchorId, address token, uint256 tokenId) external;
+    function bindToken(
+        bytes32 anchorId,
+        address token,
+        bytes32 bindingScope,
+        uint256 tokenId
+    ) external;
 
     function getAnchor(bytes32 anchorId) external view returns (AnchorRecord memory);
     function isBound(bytes32 anchorId) external view returns (bool);
 }
+
+interface IAssetAnchorRegistryRecovery {
+    function invalidateTokenBinding(bytes32 anchorId, bytes32 reasonHash) external;
+    function isBindingValid(bytes32 anchorId) external view returns (bool);
+}
 ```
+
+Disputed or squatted bindings can be invalidated by the registry admin. Invalidation permanently deactivates the disputed anchor and frees the token-binding slot while preserving the original binding fields for audit history.
 
 **Anchor lifecycle:**
 
@@ -75,7 +87,7 @@ REGISTER ──► ACTIVE ──► EXPIRED (expiresAt reached)
 
 **Metadata** is packed ABI-encoded and carries `assetClass`, `jurisdiction`, `attestationDate`, `expiresAt`, `uri`, and `extensions`. Encoding and decoding is handled by `AnchorMetadataLib`.
 
-**Consumer verification** requires checking both sides: the registry confirms the anchor is active and bound; the token confirms it declares the same registry and `anchorId`.
+**Consumer verification** requires checking both sides: the registry confirms the anchor is active and its binding is valid; the token confirms it declares the same registry and `anchorId`.
 
 ---
 
@@ -248,12 +260,19 @@ interface INAVSnapshotOracle {
         bytes32 currency,
         int256 nav,
         uint8 decimals,
-        uint8 navBasis,
+        bytes32 navBasis,
         uint64 valuationTimestamp,
         bytes32 methodologyHash,
         string calldata methodologyURI,
         uint256 correctsIndex
     ) external returns (uint256 snapshotIndex);
+
+    function invalidateSnapshot(
+        bytes32 subjectId,
+        bytes32 currency,
+        uint256 snapshotIndex,
+        bytes32 reasonHash
+    ) external;
 
     function latestNAV(bytes32 subjectId, bytes32 currency)
         external view returns (NAVSnapshot memory);

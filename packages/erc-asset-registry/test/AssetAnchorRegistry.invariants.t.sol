@@ -6,6 +6,8 @@ import {AssetAnchorRegistry} from "../src/reference/AssetAnchorRegistry.sol";
 import {AssetRegistryConstants} from "../src/libraries/AssetRegistryConstants.sol";
 import {AnchorMetadataLib} from "../src/libraries/AnchorMetadataLib.sol";
 
+contract InvariantPlainToken {}
+
 /// @dev Drives all registry state transitions for the invariant fuzzer.
 contract RegistryHandler is Test {
     AssetAnchorRegistry public registry;
@@ -22,6 +24,7 @@ contract RegistryHandler is Test {
     mapping(bytes32 => bytes32) public legalHashOf;
     mapping(bytes32 => bytes32) public evidenceHashOf;
     mapping(bytes32 => bool) public wasDeactivated;
+    mapping(bytes32 => bool) public bindingInvalidated;
 
     mapping(bytes32 => bytes32) public anchorByTokenBinding;
 
@@ -38,9 +41,9 @@ contract RegistryHandler is Test {
         vm.prank(admin);
         registry.grantRole(registrarRole, registrar);
 
-        tokens.push(address(0xC1));
-        tokens.push(address(0xC2));
-        tokens.push(address(0xC3));
+        tokens.push(address(new InvariantPlainToken()));
+        tokens.push(address(new InvariantPlainToken()));
+        tokens.push(address(new InvariantPlainToken()));
     }
 
     function _metadata(uint64 expiry) internal view returns (bytes memory) {
@@ -112,6 +115,23 @@ contract RegistryHandler is Test {
         } catch {}
     }
 
+    function invalidateBinding(uint256 anchorIdx, bytes32 reasonHash) external {
+        if (anchorIds.length == 0) return;
+        anchorIdx = bound(anchorIdx, 0, anchorIds.length - 1);
+        bytes32 anchorId = anchorIds[anchorIdx];
+        if (boundTokenOf[anchorId] == address(0) || bindingInvalidated[anchorId]) return;
+        if (reasonHash == bytes32(0)) reasonHash = keccak256("invariant invalidation");
+
+        vm.prank(admin);
+        try registry.invalidateTokenBinding(anchorId, reasonHash) {
+            bindingInvalidated[anchorId] = true;
+            wasDeactivated[anchorId] = true;
+            bytes32 bindingKey =
+                keccak256(abi.encode(boundTokenOf[anchorId], boundBindingScopeOf[anchorId], boundTokenIdOf[anchorId]));
+            anchorByTokenBinding[bindingKey] = bytes32(0);
+        } catch {}
+    }
+
     function reattest(uint256 anchorIdx, uint64 extraDays) external {
         if (anchorIds.length == 0) return;
         anchorIdx = bound(anchorIdx, 0, anchorIds.length - 1);
@@ -144,7 +164,7 @@ contract AssetAnchorRegistryInvariantTest is Test {
         for (uint256 i = 0; i < n; i++) {
             bytes32 ai = handler.anchorIds(i);
             address bt = handler.boundTokenOf(ai);
-            if (bt == address(0)) continue;
+            if (bt == address(0) || handler.bindingInvalidated(ai)) continue;
 
             uint256 bid = handler.boundTokenIdOf(ai);
             bytes32 scope = handler.boundBindingScopeOf(ai);

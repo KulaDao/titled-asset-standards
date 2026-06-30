@@ -2,17 +2,27 @@
 pragma solidity ^0.8.24;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {IAssetAnchorRegistry, IAssetAnchorRegistryLifecycle} from "../interfaces/IAssetAnchorRegistry.sol";
+import {
+    IAssetAnchorRegistry,
+    IAssetAnchorRegistryLifecycle,
+    IAssetAnchorRegistryRecovery
+} from "../interfaces/IAssetAnchorRegistry.sol";
 import {AssetRegistryConstants} from "../libraries/AssetRegistryConstants.sol";
 import {AnchorMetadataLib} from "../libraries/AnchorMetadataLib.sol";
 
-contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecycle, AccessControl {
+contract AssetAnchorRegistry is
+    IAssetAnchorRegistry,
+    IAssetAnchorRegistryLifecycle,
+    IAssetAnchorRegistryRecovery,
+    AccessControl
+{
     bytes32 public constant REGISTRAR_ROLE = keccak256("REGISTRAR");
 
     mapping(bytes32 => AnchorRecord) private _records;
     mapping(bytes32 => AnchorMetadataLib.AnchorMetadata) private _metadata;
     mapping(bytes32 => address) private _registeredBy;
     mapping(bytes32 => bytes32) private _boundAnchorByTokenBinding;
+    mapping(bytes32 => bool) private _bindingInvalidated;
 
     constructor(address admin) {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -74,7 +84,8 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecy
 
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
         return interfaceId == type(IAssetAnchorRegistry).interfaceId
-            || interfaceId == type(IAssetAnchorRegistryLifecycle).interfaceId || super.supportsInterface(interfaceId);
+            || interfaceId == type(IAssetAnchorRegistryLifecycle).interfaceId
+            || interfaceId == type(IAssetAnchorRegistryRecovery).interfaceId || super.supportsInterface(interfaceId);
     }
 
     function _bind(AnchorRecord storage rec, bytes32 anchorId, address token, bytes32 bindingScope, uint256 tokenId)
@@ -116,10 +127,7 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecy
         (bool ok, bytes memory data) = token.staticcall(abi.encodeWithSignature("anchorRegistry()"));
         if (ok) {
             require(data.length >= 32, "AssetAnchorRegistry: token registry mismatch");
-            address declared;
-            assembly {
-                declared := mload(add(data, 32))
-            }
+            address declared = abi.decode(data, (address));
             require(declared == address(this), "AssetAnchorRegistry: token registry mismatch");
         }
     }
@@ -157,23 +165,31 @@ contract AssetAnchorRegistry is IAssetAnchorRegistry, IAssetAnchorRegistryLifecy
         emit AnchorRegistered(anchorId, legalHash, evidenceHash);
     }
 
-    /// @notice Admin-only: clear the token binding for an anchor, freeing the squatted slot.
-    function clearTokenBinding(bytes32 anchorId) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    /// @notice Admin-only recovery for a disputed binding. The original record remains immutable.
+    function invalidateTokenBinding(bytes32 anchorId, bytes32 reasonHash) external onlyRole(DEFAULT_ADMIN_ROLE) {
         AnchorRecord storage rec = _records[anchorId];
         require(rec.registeredAt != 0, "AssetAnchorRegistry: anchor not found");
         require(rec.boundToken != address(0), "AssetAnchorRegistry: not bound");
+        require(reasonHash != bytes32(0), "AssetAnchorRegistry: zero reasonHash");
+        require(!_bindingInvalidated[anchorId], "AssetAnchorRegistry: binding already invalidated");
 
         bytes32 bindingKey = _tokenBindingKey(rec.boundToken, rec.bindingScope, rec.boundTokenId);
-        address token = rec.boundToken;
-        bytes32 bindingScope = rec.bindingScope;
-        uint256 tokenId = rec.boundTokenId;
+        require(_boundAnchorByTokenBinding[bindingKey] == anchorId, "AssetAnchorRegistry: binding slot mismatch");
 
+        _bindingInvalidated[anchorId] = true;
         _boundAnchorByTokenBinding[bindingKey] = bytes32(0);
-        rec.boundToken = address(0);
-        rec.bindingScope = bytes32(0);
-        rec.boundTokenId = 0;
+        if (rec.active) {
+            rec.active = false;
+            emit AnchorDeactivated(anchorId, "binding invalidated");
+        }
 
-        emit TokenBindingCleared(anchorId, token, bindingScope, tokenId);
+        emit TokenBindingInvalidated(anchorId, rec.boundToken, rec.bindingScope, rec.boundTokenId, reasonHash);
+    }
+
+    function isBindingValid(bytes32 anchorId) external view returns (bool) {
+        AnchorRecord storage rec = _records[anchorId];
+        require(rec.registeredAt != 0, "AssetAnchorRegistry: anchor not found");
+        return rec.boundToken != address(0) && !_bindingInvalidated[anchorId];
     }
 
     /// @notice Permanently deactivates an anchor. Cannot be reversed by re-attestation.

@@ -19,8 +19,6 @@ interface IAssetAnchorRegistry {
 
     event TokenBound(bytes32 indexed anchorId, address indexed token, bytes32 indexed bindingScope, uint256 tokenId);
 
-    event TokenBindingCleared(bytes32 indexed anchorId, address indexed token, bytes32 indexed bindingScope, uint256 tokenId);
-
     event AnchorDeactivated(bytes32 indexed anchorId, string reason);
 
     event AnchorReattested(
@@ -71,10 +69,24 @@ interface IAssetAnchorRegistry {
     ///      SHOULD call isAnchorActive() on the token contract, not isBound() on the registry.
     ///      Reverts if anchorId does not exist in this registry.
     function isBound(bytes32 anchorId) external view returns (bool);
+}
 
-    /// @notice Admin-only: clear the token binding for an anchor, freeing the slot.
-    /// @dev Allows recovery from a squatted binding key. Reverts if the anchor is not bound.
-    function clearTokenBinding(bytes32 anchorId) external;
+interface IAssetAnchorRegistryRecovery {
+    event TokenBindingInvalidated(
+        bytes32 indexed anchorId,
+        address indexed token,
+        bytes32 indexed bindingScope,
+        uint256 tokenId,
+        bytes32 reasonHash
+    );
+
+    /// @notice Permanently invalidate a disputed binding while preserving its record.
+    /// @dev Implementations MUST leave the anchor's binding fields unchanged, MUST make
+    ///      the anchor inactive, and MAY free the token-binding slot for a replacement anchor.
+    function invalidateTokenBinding(bytes32 anchorId, bytes32 reasonHash) external;
+
+    /// @notice Return true when the anchor is bound and its binding has not been invalidated.
+    function isBindingValid(bytes32 anchorId) external view returns (bool);
 }
 
 interface IAssetAnchorRegistryLifecycle {
