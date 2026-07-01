@@ -92,18 +92,21 @@ rather than sharing a zero namespace.
 
 Each `(subjectId, role)` slot has a **slot principal** — the address authorised to call `supersedeBundle` for that slot. The principal is set to `msg.sender` whenever a bundle is anchored or superseded into the slot. `DEFAULT_ADMIN_ROLE` can always supersede regardless of the current principal.
 
-`assignSlotPrincipal(subjectId, role, principal)` (`DEFAULT_ADMIN_ROLE` only) atomically reassigns slot authority without going through `supersedeBundle`. The designated `principal` must hold `ANCHOR_ROLE`. This is the admin recovery path for slot squatting: the squatter cannot front-run `assignSlotPrincipal` because they lack `DEFAULT_ADMIN_ROLE`.
+`slotPrincipal(subjectId, role)` and `assignSlotPrincipal(subjectId, role, principal)` are defined on the separate `IDocumentBundleAnchorRecovery` extension interface. The core `IDocumentBundleAnchor` interface ID is stable across deployments that use different recovery models; `BundleAnchorVerifier` checks only the core interface.
 
-**Slot squatting recovery flow:**
+**Contested-slot recovery — use `assignSlotPrincipal`, not direct admin `supersedeBundle`**
+
+> ⚠️ Calling `supersedeBundle` directly as admin on a contested slot is front-runnable. The squatter still holds `ANCHOR_ROLE` and is the current slot principal, so they can call `supersedeBundle` first with higher gas, invalidating the admin's `oldBundleHash` argument. Use the sequence below instead.
 
 ```
-1. Squatter (ANCHOR_ROLE) calls anchorBundle() → occupies slot
-2. Admin calls assignSlotPrincipal(subjectId, role, legitOperator)
-   → squatter's subsequent supersedeBundle() calls revert immediately
-3. Legit operator calls supersedeBundle() to install the correct bundle
+1. Admin calls assignSlotPrincipal(subjectId, role, legitimateOperator)
+   — atomic and un-front-runnable: squatter lacks DEFAULT_ADMIN_ROLE
+2. Admin grants ANCHOR_ROLE to legitimateOperator if not already held
+3. legitimateOperator calls supersedeBundle() using the now-stable active bundle hash
+   — squatter's supersedeBundle() calls now revert (no longer the slot principal)
 ```
 
-If a principal needs to be pre-assigned before first occupation, call `assignSlotPrincipal` before any `anchorBundle` for that slot. `anchorBundle` enforces `_slotPrincipal == address(0) || _slotPrincipal == msg.sender` so a pre-assigned principal cannot be bypassed by another `ANCHOR_ROLE` holder.
+**Pre-assignment (optional):** Call `assignSlotPrincipal` before any `anchorBundle` for a slot to reserve it. `anchorBundle` enforces `_slotPrincipal == address(0) || _slotPrincipal == msg.sender`, so the pre-assignment cannot be bypassed by another `ANCHOR_ROLE` holder.
 
 ## Consumer Verification
 

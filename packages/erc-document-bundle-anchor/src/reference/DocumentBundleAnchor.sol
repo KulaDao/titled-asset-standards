@@ -2,9 +2,9 @@
 pragma solidity ^0.8.24;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {IDocumentBundleAnchor} from "../interfaces/IDocumentBundleAnchor.sol";
+import {IDocumentBundleAnchor, IDocumentBundleAnchorRecovery} from "../interfaces/IDocumentBundleAnchor.sol";
 
-contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
+contract DocumentBundleAnchor is IDocumentBundleAnchor, IDocumentBundleAnchorRecovery, AccessControl {
     bytes32 public constant ANCHOR_ROLE = keccak256("ANCHOR");
 
     // Records keyed by keccak256(abi.encode(bundleHash, subjectId, role)).
@@ -57,7 +57,9 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         _anchor(bundleHash, subjectId, role, documentCount, metadataURI, tripleKey, slotKey);
     }
 
-    /// @dev Requires the original anchorer to retain ANCHOR_ROLE, or DEFAULT_ADMIN_ROLE for recovery.
+    /// @dev Caller must be the current slot principal or DEFAULT_ADMIN_ROLE.
+    ///      On a contested slot, do NOT call this directly as admin — the squatter can front-run
+    ///      it by superseding first, invalidating oldBundleHash. Use assignSlotPrincipal first.
     function supersedeBundle(
         bytes32 oldBundleHash,
         bytes32 newBundleHash,
@@ -142,7 +144,8 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
     }
 
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
-        return interfaceId == type(IDocumentBundleAnchor).interfaceId || super.supportsInterface(interfaceId);
+        return interfaceId == type(IDocumentBundleAnchor).interfaceId
+            || interfaceId == type(IDocumentBundleAnchorRecovery).interfaceId || super.supportsInterface(interfaceId);
     }
 
     function _anchor(

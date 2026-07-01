@@ -53,12 +53,6 @@ contract MockBundleAnchorRegistry is IDocumentBundleAnchor, IERC165 {
     function activeBundle(bytes32, bytes32) external view returns (bytes32) {
         return _active;
     }
-
-    function slotPrincipal(bytes32, bytes32) external pure returns (address) {
-        return address(0);
-    }
-
-    function assignSlotPrincipal(bytes32, bytes32, address) external {}
 }
 
 contract RevertingSupportsInterfaceRegistry {

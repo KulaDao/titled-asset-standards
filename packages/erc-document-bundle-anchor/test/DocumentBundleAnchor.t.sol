@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {DocumentBundleAnchor} from "../src/reference/DocumentBundleAnchor.sol";
-import {IDocumentBundleAnchor} from "../src/interfaces/IDocumentBundleAnchor.sol";
+import {IDocumentBundleAnchor, IDocumentBundleAnchorRecovery} from "../src/interfaces/IDocumentBundleAnchor.sol";
 
 contract DocumentBundleAnchorTest is Test {
     bytes4 constant ACCESS_CONTROL_UNAUTHORIZED =
@@ -535,7 +535,7 @@ contract DocumentBundleAnchorTest is Test {
 
         vm.prank(admin);
         vm.expectEmit(true, true, true, false);
-        emit IDocumentBundleAnchor.SlotPrincipalAssigned(SUBJECT_A, ROLE_1, realAnchorUser);
+        emit IDocumentBundleAnchorRecovery.SlotPrincipalAssigned(SUBJECT_A, ROLE_1, realAnchorUser);
         anchor.assignSlotPrincipal(SUBJECT_A, ROLE_1, realAnchorUser);
     }
 
