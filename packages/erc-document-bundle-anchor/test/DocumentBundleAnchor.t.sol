@@ -494,4 +494,96 @@ contract DocumentBundleAnchorTest is Test {
         assertEq(replacement.anchoredBy, admin, "admin must be replacement anchorer");
         assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_2, "active slot must use admin replacement");
     }
+
+    // ── slotPrincipal ─────────────────────────────────────────────────────
+
+    function test_slotPrincipal_setOnAnchor() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+        assertEq(anchor.slotPrincipal(SUBJECT_A, ROLE_1), anchorUser);
+    }
+
+    function test_slotPrincipal_updatedOnSupersede() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+
+        vm.prank(admin);
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 2, "v2-admin");
+
+        assertEq(anchor.slotPrincipal(SUBJECT_A, ROLE_1), admin, "principal should be updated to admin after supersede");
+    }
+
+    function test_slotPrincipal_zeroIfNeverAnchored() public {
+        assertEq(anchor.slotPrincipal(SUBJECT_A, ROLE_1), address(0));
+    }
+
+    // ── assignSlotPrincipal ───────────────────────────────────────────────
+
+    function test_assignSlotPrincipal_adminCanReassign() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+
+        vm.prank(admin);
+        anchor.assignSlotPrincipal(SUBJECT_A, ROLE_1, realAnchorUser);
+
+        assertEq(anchor.slotPrincipal(SUBJECT_A, ROLE_1), realAnchorUser);
+    }
+
+    function test_assignSlotPrincipal_emitsEvent() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+
+        vm.prank(admin);
+        vm.expectEmit(true, true, true, false);
+        emit IDocumentBundleAnchor.SlotPrincipalAssigned(SUBJECT_A, ROLE_1, realAnchorUser);
+        anchor.assignSlotPrincipal(SUBJECT_A, ROLE_1, realAnchorUser);
+    }
+
+    function test_assignSlotPrincipal_nonAdminReverts() public {
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "v1");
+
+        bytes32 adminRole = anchor.DEFAULT_ADMIN_ROLE();
+        vm.prank(anchorUser);
+        vm.expectRevert(abi.encodeWithSelector(ACCESS_CONTROL_UNAUTHORIZED, anchorUser, adminRole));
+        anchor.assignSlotPrincipal(SUBJECT_A, ROLE_1, realAnchorUser);
+    }
+
+    function test_assignSlotPrincipal_revertsZeroPrincipal() public {
+        vm.prank(admin);
+        vm.expectRevert("DocumentBundleAnchor: zero principal");
+        anchor.assignSlotPrincipal(SUBJECT_A, ROLE_1, address(0));
+    }
+
+    function test_assignSlotPrincipal_preventsSquatterFromSuperseding() public {
+        // Squatter (anchorUser) occupies the slot
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "squat");
+
+        // Admin atomically strips squatter's principal authority
+        vm.prank(admin);
+        anchor.assignSlotPrincipal(SUBJECT_A, ROLE_1, realAnchorUser);
+
+        // Squatter still has ANCHOR_ROLE but can no longer supersede — cannot front-run admin recovery
+        vm.prank(anchorUser);
+        vm.expectRevert("DocumentBundleAnchor: not authorized to supersede");
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 1, "re-squat");
+    }
+
+    function test_assignSlotPrincipal_newPrincipalCanSupersede() public {
+        // Squatter occupies the slot
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "squat");
+
+        // Admin reassigns slot authority to the legitimate operator
+        vm.prank(admin);
+        anchor.assignSlotPrincipal(SUBJECT_A, ROLE_1, realAnchorUser);
+
+        // Legitimate operator can now recover the slot
+        vm.prank(realAnchorUser);
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_R1, SUBJECT_A, ROLE_1, 2, "legit");
+
+        assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_R1, "legit bundle should be active");
+        assertEq(anchor.slotPrincipal(SUBJECT_A, ROLE_1), realAnchorUser, "principal updated to realAnchorUser");
+    }
 }

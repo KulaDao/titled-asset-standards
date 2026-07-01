@@ -22,6 +22,8 @@ interface IDocumentBundleAnchor {
         bytes32 indexed oldBundleHash, bytes32 indexed newBundleHash, bytes32 indexed subjectId, bytes32 role
     );
 
+    event SlotPrincipalAssigned(bytes32 indexed subjectId, bytes32 indexed role, address indexed principal);
+
     /// @dev Reference implementations MUST reject zero bundleHash, subjectId, role, and documentCount.
     function anchorBundle(
         bytes32 bundleHash,
@@ -44,4 +46,11 @@ interface IDocumentBundleAnchor {
     function getAnchor(bytes32 bundleHash, bytes32 subjectId, bytes32 role) external view returns (AnchorRecord memory);
     function isAnchored(bytes32 bundleHash, bytes32 subjectId, bytes32 role) external view returns (bool);
     function activeBundle(bytes32 subjectId, bytes32 role) external view returns (bytes32);
+
+    /// @notice Returns the address currently authorized to supersede the active bundle for (subjectId, role).
+    function slotPrincipal(bytes32 subjectId, bytes32 role) external view returns (address);
+
+    /// @notice Admin-only: atomically reassign slot authority, breaking a squatter's supersede capability
+    ///         without going through supersedeBundle (which the squatter could front-run).
+    function assignSlotPrincipal(bytes32 subjectId, bytes32 role, address principal) external;
 }

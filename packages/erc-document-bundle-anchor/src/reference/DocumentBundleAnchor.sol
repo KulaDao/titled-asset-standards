@@ -14,6 +14,11 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
     // Active bundle hash per keccak256(abi.encode(subjectId, role)) slot.
     mapping(bytes32 => bytes32) private _activeSlots;
 
+    // Slot principal: the address authorized to call supersedeBundle for a given slot.
+    // Set to msg.sender when a slot is first occupied or superseded; overridable by admin
+    // via assignSlotPrincipal without going through supersedeBundle (preventing front-running).
+    mapping(bytes32 => address) private _slotPrincipals;
+
     constructor(address admin) {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(ANCHOR_ROLE, admin);
@@ -72,7 +77,7 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         require(_activeSlots[slotKey] == oldBundleHash, "DocumentBundleAnchor: old bundle not active for given slot");
 
         require(
-            old.anchoredBy == msg.sender || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
+            _slotPrincipals[slotKey] == msg.sender || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
             "DocumentBundleAnchor: not authorized to supersede"
         );
 
@@ -105,6 +110,22 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         return _activeSlots[_slotKey(subjectId, role)];
     }
 
+    function slotPrincipal(bytes32 subjectId, bytes32 role) external view returns (address) {
+        return _slotPrincipals[_slotKey(subjectId, role)];
+    }
+
+    function assignSlotPrincipal(bytes32 subjectId, bytes32 role, address principal)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(subjectId != bytes32(0), "DocumentBundleAnchor: zero subjectId");
+        require(role != bytes32(0), "DocumentBundleAnchor: zero role");
+        require(principal != address(0), "DocumentBundleAnchor: zero principal");
+        bytes32 slotKey = _slotKey(subjectId, role);
+        _slotPrincipals[slotKey] = principal;
+        emit SlotPrincipalAssigned(subjectId, role, principal);
+    }
+
     function _tripleKey(bytes32 bundleHash, bytes32 subjectId, bytes32 role) internal pure returns (bytes32) {
         return keccak256(abi.encode(bundleHash, subjectId, role));
     }
@@ -127,6 +148,7 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         bytes32 slotKey
     ) internal {
         _activeSlots[slotKey] = bundleHash;
+        _slotPrincipals[slotKey] = msg.sender;
         _records[tripleKey] = AnchorRecord({
             bundleHash: bundleHash,
             subjectId: subjectId,
