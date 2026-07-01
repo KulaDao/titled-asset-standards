@@ -45,3 +45,29 @@ interface IDocumentBundleAnchor {
     function isAnchored(bytes32 bundleHash, bytes32 subjectId, bytes32 role) external view returns (bool);
     function activeBundle(bytes32 subjectId, bytes32 role) external view returns (bytes32);
 }
+
+/// @notice Admin recovery extension for IDocumentBundleAnchor.
+/// @dev Kept separate so the core IDocumentBundleAnchor interface ID is stable across
+///      deployments that implement different recovery models. BundleAnchorVerifier checks
+///      only IDocumentBundleAnchor; consumers that require recovery capability should
+///      additionally check this interface.
+interface IDocumentBundleAnchorRecovery {
+    /// @notice Emitted when an admin atomically reassigns slot authority.
+    event SlotPrincipalAssigned(bytes32 indexed subjectId, bytes32 indexed role, address indexed principal);
+
+    /// @notice Returns the address currently authorized to supersede the active bundle for
+    ///         (subjectId, role). The principal must also hold ANCHOR_ROLE or DEFAULT_ADMIN_ROLE
+    ///         to successfully call supersedeBundle.
+    function slotPrincipal(bytes32 subjectId, bytes32 role) external view returns (address);
+
+    /// @notice Admin-only: atomically reassign slot authority without going through supersedeBundle.
+    /// @dev supersedeBundle is front-runnable on a contested slot (the squatter, still holding
+    ///      ANCHOR_ROLE and being the current slot principal, can call supersedeBundle first and
+    ///      invalidate the admin's oldBundleHash argument). assignSlotPrincipal is NOT front-runnable
+    ///      because the squatter lacks DEFAULT_ADMIN_ROLE. The required recovery sequence is:
+    ///      1. Admin calls assignSlotPrincipal(subjectId, role, legitimateOperator).
+    ///      2. Admin grants ANCHOR_ROLE to legitimateOperator if not already held.
+    ///      3. legitimateOperator calls supersedeBundle using the now-stable active bundle hash.
+    ///      The designated principal must hold ANCHOR_ROLE or DEFAULT_ADMIN_ROLE.
+    function assignSlotPrincipal(bytes32 subjectId, bytes32 role, address principal) external;
+}

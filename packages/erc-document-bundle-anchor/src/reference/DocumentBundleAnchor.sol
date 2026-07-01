@@ -2,9 +2,9 @@
 pragma solidity ^0.8.24;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {IDocumentBundleAnchor} from "../interfaces/IDocumentBundleAnchor.sol";
+import {IDocumentBundleAnchor, IDocumentBundleAnchorRecovery} from "../interfaces/IDocumentBundleAnchor.sol";
 
-contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
+contract DocumentBundleAnchor is IDocumentBundleAnchor, IDocumentBundleAnchorRecovery, AccessControl {
     bytes32 public constant ANCHOR_ROLE = keccak256("ANCHOR");
 
     // Records keyed by keccak256(abi.encode(bundleHash, subjectId, role)).
@@ -13,6 +13,11 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
 
     // Active bundle hash per keccak256(abi.encode(subjectId, role)) slot.
     mapping(bytes32 => bytes32) private _activeSlots;
+
+    // Slot principal: the address authorized to call supersedeBundle for a given slot.
+    // Set to msg.sender when a slot is first occupied or superseded; overridable by admin
+    // via assignSlotPrincipal without going through supersedeBundle (preventing front-running).
+    mapping(bytes32 => address) private _slotPrincipals;
 
     constructor(address admin) {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -46,10 +51,15 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         bytes32 slotKey = _slotKey(subjectId, role);
         require(_activeSlots[slotKey] == bytes32(0), "DocumentBundleAnchor: active slot occupied, use supersedeBundle");
 
+        address principal = _slotPrincipals[slotKey];
+        require(principal == address(0) || principal == msg.sender, "DocumentBundleAnchor: slot principal mismatch");
+
         _anchor(bundleHash, subjectId, role, documentCount, metadataURI, tripleKey, slotKey);
     }
 
-    /// @dev Requires the original anchorer to retain ANCHOR_ROLE, or DEFAULT_ADMIN_ROLE for recovery.
+    /// @dev Caller must be the current slot principal or DEFAULT_ADMIN_ROLE.
+    ///      On a contested slot, do NOT call this directly as admin — the squatter can front-run
+    ///      it by superseding first, invalidating oldBundleHash. Use assignSlotPrincipal first.
     function supersedeBundle(
         bytes32 oldBundleHash,
         bytes32 newBundleHash,
@@ -72,7 +82,7 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         require(_activeSlots[slotKey] == oldBundleHash, "DocumentBundleAnchor: old bundle not active for given slot");
 
         require(
-            old.anchoredBy == msg.sender || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
+            _slotPrincipals[slotKey] == msg.sender || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
             "DocumentBundleAnchor: not authorized to supersede"
         );
 
@@ -105,6 +115,26 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         return _activeSlots[_slotKey(subjectId, role)];
     }
 
+    function slotPrincipal(bytes32 subjectId, bytes32 role) external view returns (address) {
+        return _slotPrincipals[_slotKey(subjectId, role)];
+    }
+
+    function assignSlotPrincipal(bytes32 subjectId, bytes32 role, address principal)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(subjectId != bytes32(0), "DocumentBundleAnchor: zero subjectId");
+        require(role != bytes32(0), "DocumentBundleAnchor: zero role");
+        require(principal != address(0), "DocumentBundleAnchor: zero principal");
+        require(
+            hasRole(ANCHOR_ROLE, principal) || hasRole(DEFAULT_ADMIN_ROLE, principal),
+            "DocumentBundleAnchor: principal lacks supersede capability"
+        );
+        bytes32 slotKey = _slotKey(subjectId, role);
+        _slotPrincipals[slotKey] = principal;
+        emit SlotPrincipalAssigned(subjectId, role, principal);
+    }
+
     function _tripleKey(bytes32 bundleHash, bytes32 subjectId, bytes32 role) internal pure returns (bytes32) {
         return keccak256(abi.encode(bundleHash, subjectId, role));
     }
@@ -114,7 +144,8 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
     }
 
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
-        return interfaceId == type(IDocumentBundleAnchor).interfaceId || super.supportsInterface(interfaceId);
+        return interfaceId == type(IDocumentBundleAnchor).interfaceId
+            || interfaceId == type(IDocumentBundleAnchorRecovery).interfaceId || super.supportsInterface(interfaceId);
     }
 
     function _anchor(
@@ -127,6 +158,7 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         bytes32 slotKey
     ) internal {
         _activeSlots[slotKey] = bundleHash;
+        _slotPrincipals[slotKey] = msg.sender;
         _records[tripleKey] = AnchorRecord({
             bundleHash: bundleHash,
             subjectId: subjectId,
