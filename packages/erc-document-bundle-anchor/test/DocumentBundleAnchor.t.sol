@@ -555,6 +555,49 @@ contract DocumentBundleAnchorTest is Test {
         anchor.assignSlotPrincipal(SUBJECT_A, ROLE_1, address(0));
     }
 
+    function test_assignSlotPrincipal_revertsIfPrincipalLacksAnchorRole() public {
+        address noRole = address(0xBEEF);
+        vm.prank(admin);
+        vm.expectRevert("DocumentBundleAnchor: principal lacks supersede capability");
+        anchor.assignSlotPrincipal(SUBJECT_A, ROLE_1, noRole);
+    }
+
+    function test_anchorBundle_preAssignedPrincipalBlocksOtherAnchorers() public {
+        // Admin pre-assigns principal to realAnchorUser before any bundle is anchored
+        vm.prank(admin);
+        anchor.assignSlotPrincipal(SUBJECT_A, ROLE_1, realAnchorUser);
+
+        // A different ANCHOR_ROLE holder cannot occupy the pre-assigned slot
+        vm.prank(anchorUser);
+        vm.expectRevert("DocumentBundleAnchor: slot principal mismatch");
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "squat attempt");
+    }
+
+    function test_anchorBundle_preAssignedPrincipalCanAnchor() public {
+        vm.prank(admin);
+        anchor.assignSlotPrincipal(SUBJECT_A, ROLE_1, realAnchorUser);
+
+        vm.prank(realAnchorUser);
+        anchor.anchorBundle(BUNDLE_R1, SUBJECT_A, ROLE_1, 1, "legit");
+
+        assertEq(anchor.activeBundle(SUBJECT_A, ROLE_1), BUNDLE_R1);
+    }
+
+    function test_assignSlotPrincipal_squatterCannotSupersedeSameBlock() public {
+        // Squatter occupies slot
+        vm.prank(anchorUser);
+        anchor.anchorBundle(BUNDLE_1, SUBJECT_A, ROLE_1, 1, "squat");
+
+        // Admin strips squatter's authority in the same block
+        vm.prank(admin);
+        anchor.assignSlotPrincipal(SUBJECT_A, ROLE_1, realAnchorUser);
+
+        // Squatter's supersede in the same block reverts — ordering within block does not help them
+        vm.prank(anchorUser);
+        vm.expectRevert("DocumentBundleAnchor: not authorized to supersede");
+        anchor.supersedeBundle(BUNDLE_1, BUNDLE_2, SUBJECT_A, ROLE_1, 1, "re-squat");
+    }
+
     function test_assignSlotPrincipal_preventsSquatterFromSuperseding() public {
         // Squatter (anchorUser) occupies the slot
         vm.prank(anchorUser);

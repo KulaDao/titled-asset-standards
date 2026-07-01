@@ -85,14 +85,25 @@ rather than sharing a zero namespace.
 
 | Role | Constant | Permissions |
 |------|----------|-------------|
-| `DEFAULT_ADMIN_ROLE` | `0x00` | Grant/revoke roles, supersede any anchor |
-| `ANCHOR_ROLE` | `keccak256("ANCHOR")` | Anchor new bundles, supersede own anchors |
+| `DEFAULT_ADMIN_ROLE` | `0x00` | Grant/revoke roles, supersede any bundle, reassign slot principals |
+| `ANCHOR_ROLE` | `keccak256("ANCHOR")` | Anchor new bundles, supersede own slot's bundles |
 
-`DEFAULT_ADMIN_ROLE` can supersede an active bundle even when the original
-anchorer has lost `ANCHOR_ROLE`. This is an explicit orphaned-slot recovery
-path. It does not let arbitrary `ANCHOR_ROLE` holders take over another
-anchorer's slot; non-admin callers must be the original anchorer and still hold
-`ANCHOR_ROLE`.
+### Slot principal model
+
+Each `(subjectId, role)` slot has a **slot principal** — the address authorised to call `supersedeBundle` for that slot. The principal is set to `msg.sender` whenever a bundle is anchored or superseded into the slot. `DEFAULT_ADMIN_ROLE` can always supersede regardless of the current principal.
+
+`assignSlotPrincipal(subjectId, role, principal)` (`DEFAULT_ADMIN_ROLE` only) atomically reassigns slot authority without going through `supersedeBundle`. The designated `principal` must hold `ANCHOR_ROLE`. This is the admin recovery path for slot squatting: the squatter cannot front-run `assignSlotPrincipal` because they lack `DEFAULT_ADMIN_ROLE`.
+
+**Slot squatting recovery flow:**
+
+```
+1. Squatter (ANCHOR_ROLE) calls anchorBundle() → occupies slot
+2. Admin calls assignSlotPrincipal(subjectId, role, legitOperator)
+   → squatter's subsequent supersedeBundle() calls revert immediately
+3. Legit operator calls supersedeBundle() to install the correct bundle
+```
+
+If a principal needs to be pre-assigned before first occupation, call `assignSlotPrincipal` before any `anchorBundle` for that slot. `anchorBundle` enforces `_slotPrincipal == address(0) || _slotPrincipal == msg.sender` so a pre-assigned principal cannot be bypassed by another `ANCHOR_ROLE` holder.
 
 ## Consumer Verification
 

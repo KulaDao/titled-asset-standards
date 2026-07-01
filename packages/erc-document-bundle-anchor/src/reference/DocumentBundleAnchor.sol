@@ -51,6 +51,9 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         bytes32 slotKey = _slotKey(subjectId, role);
         require(_activeSlots[slotKey] == bytes32(0), "DocumentBundleAnchor: active slot occupied, use supersedeBundle");
 
+        address principal = _slotPrincipals[slotKey];
+        require(principal == address(0) || principal == msg.sender, "DocumentBundleAnchor: slot principal mismatch");
+
         _anchor(bundleHash, subjectId, role, documentCount, metadataURI, tripleKey, slotKey);
     }
 
@@ -121,6 +124,10 @@ contract DocumentBundleAnchor is IDocumentBundleAnchor, AccessControl {
         require(subjectId != bytes32(0), "DocumentBundleAnchor: zero subjectId");
         require(role != bytes32(0), "DocumentBundleAnchor: zero role");
         require(principal != address(0), "DocumentBundleAnchor: zero principal");
+        require(
+            hasRole(ANCHOR_ROLE, principal) || hasRole(DEFAULT_ADMIN_ROLE, principal),
+            "DocumentBundleAnchor: principal lacks supersede capability"
+        );
         bytes32 slotKey = _slotKey(subjectId, role);
         _slotPrincipals[slotKey] = principal;
         emit SlotPrincipalAssigned(subjectId, role, principal);
