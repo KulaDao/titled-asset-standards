@@ -372,7 +372,7 @@ slither . --config-file slither.config.json
 medusa fuzz
 ```
 
-**Specification documents** (docx and markdown) are maintained in `specs/` at the repository root.
+**Specification documents:** the [technical white paper](./specs/Title%20Tokenisation%20Technical%20White%20Paper.pdf) lives in `specs/`; normative interface detail is in each package README.
 
 ---
 
