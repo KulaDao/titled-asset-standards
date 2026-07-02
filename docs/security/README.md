@@ -2,7 +2,7 @@
 
 ## Verichains audit
 
-Private security review of the six reference implementation packages in this repository.
+Security review of the six reference implementation packages in this repository.
 
 | Field | Value |
 |-------|--------|
