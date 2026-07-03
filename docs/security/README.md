@@ -12,3 +12,5 @@ Security review of the six reference implementation packages in this repository.
 | **Report** | [PDF](./audits/verichains-titled-asset-standards-v1.0.pdf) (v1.0) |
 
 Add remediation commit(s) here when applicable. Do not include finding-by-finding remediation detail in the Magicians meta thread; this README is the canonical pointer for reviewers.
+
+All published PDFs are listed in [audits/README.md](./audits/README.md).
