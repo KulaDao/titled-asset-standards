@@ -6,6 +6,12 @@ Subject-linked NAV snapshot oracle with provider attribution, valuation timestam
 methodology references, correction provenance, staleness metadata, and deterministic
 median aggregation.
 
+## Specification
+
+- [ERC-8330 Subject-Linked NAV Snapshot Oracle](https://github.com/ethereum/ERCs/pull/1858/files)
+- [Ethereum Magicians discussion](https://ethereum-magicians.org/t/erc-8330-subject-linked-nav-snapshot-oracle/28939)
+- [ERC PR](https://github.com/ethereum/ERCs/pull/1858)
+
 ## Interfaces
 
 | Interface | Purpose |

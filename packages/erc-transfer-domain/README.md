@@ -2,6 +2,12 @@
 
 Reference implementation for ERC-8327: Directional Transfer Domain Registry.
 
+## Specification
+
+- [ERC-8327 Directional Transfer Domain Registry](https://github.com/ethereum/ERCs/pull/1855/files)
+- [Ethereum Magicians discussion](https://ethereum-magicians.org/t/erc-8327-directional-transfer-domain-registry/28936)
+- [ERC PR](https://github.com/ethereum/ERCs/pull/1855)
+
 This package implements a token-agnostic registry for answering one narrow
 question:
 

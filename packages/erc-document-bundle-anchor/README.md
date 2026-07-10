@@ -4,6 +4,12 @@ Reference implementation for ERC-8326: Canonical Document Bundle Anchor.
 
 On-chain anchor that binds a deterministic bundle hash (derived from a set of document entries) to a `(subjectId, role)` namespace, with full lifecycle management and permanent supersession history.
 
+## Specification
+
+- [ERC-8326 Canonical Document Bundle Anchor](https://github.com/ethereum/ERCs/pull/1854/files)
+- [Ethereum Magicians discussion](https://ethereum-magicians.org/t/erc-8326-canonical-document-bundle-anchor/28935)
+- [ERC PR](https://github.com/ethereum/ERCs/pull/1854)
+
 ## Interfaces
 
 | Interface | Purpose |
@@ -149,4 +155,4 @@ Pre-review checklist:
 
 ## Companion standards
 
-The `subjectId` used here is designed to be the `anchorId` returned by the **ERC-8325 Asset Anchor Registry** (`erc-asset-registry`), linking document bundles directly to on-chain asset anchors.
+The `subjectId` used here is designed to be the `anchorId` returned by the [**ERC-8325 Asset Anchor Registry**](../erc-asset-registry), linking document bundles directly to on-chain asset anchors.

@@ -4,6 +4,12 @@ Reference implementation for ERC-8325: Asset Anchor Registry.
 
 On-chain registry that binds a dual-hash anchor (legal + evidence document commitments) to a token contract or token ID.
 
+## Specification
+
+- [ERC-8325 Asset Anchor Registry](https://github.com/ethereum/ERCs/pull/1853/files)
+- [Ethereum Magicians discussion](https://ethereum-magicians.org/t/erc-8325-asset-anchor-registry-interface/28934)
+- [ERC PR](https://github.com/ethereum/ERCs/pull/1853)
+
 ## Interfaces
 
 | Interface | Purpose |
@@ -171,7 +177,7 @@ struct AnchorMetadata {
 
 The `anchorId` returned by `registerAnchor` is designed to serve as `subjectId` in:
 
-- **Document Bundle Anchor** (`erc-document-bundle-anchor`)
-- **Compliance Event Log** (`erc-compliance-event-log`)
-- **Impact Snapshot Log** (`erc-impact-snapshot`)
-- **NAV Oracle** (`erc-nav-oracle`)
+- [**ERC-8326 Canonical Document Bundle Anchor**](../erc-document-bundle-anchor)
+- [**ERC-8328 Subject-Linked Compliance Event Log**](../erc-compliance-event-log)
+- [**ERC-8329 Subject-Linked Impact Snapshot Log**](../erc-impact-snapshot)
+- [**ERC-8330 Subject-Linked NAV Snapshot Oracle**](../erc-nav-oracle)

@@ -1,27 +1,23 @@
----
-Proposed ERC: titled-asset-standards
-Title: Titled Asset Standards — Composable ERC Specifications for Tokenized Asset Infrastructure
-Description: Six composable ERC specifications for on-chain asset registries, document anchoring, transfer governance, compliance logging, impact reporting, and NAV oracles.
-Discussions-To: https://ethereum-magicians.org
-Status: Draft
-Type: Standards Track
-Category: ERC
-Created: 2026-05-14
-Requires: EIP-165, ERC-20, ERC-721
----
+# Titled Asset Standards
+
+Composable ERC specifications and reference implementations for titled-asset infrastructure on EVM.
+
+Umbrella discussion: [Ethereum Magicians](https://ethereum-magicians.org/t/proposing-a-family-of-candidate-erc-interfaces-for-titled-asset-infrastructure-architecture-review/28913)
 
 ## Abstract
 
 This repository contains six composable ERC specifications designed to close structural gaps in the EVM standards landscape for tokenized real-world assets. Each standard addresses a narrow, well-defined problem and can be adopted independently. Together they form a complete infrastructure layer for compliant, auditable, and interoperable tokenized assets.
 
-| ERC | Standard | Package |
-|-----|----------|---------|
-| ERC-8325 | Asset Anchor Registry | `packages/erc-asset-registry` |
-| ERC-8326 | Canonical Document Bundle Anchor | `packages/erc-document-bundle-anchor` |
-| ERC-8327 | Directional Transfer Domain Registry | `packages/erc-transfer-domain` |
-| ERC-8328 | Subject-Linked Compliance Event Log | `packages/erc-compliance-event-log` |
-| ERC-8329 | Subject-Linked Impact Snapshot Log | `packages/erc-impact-snapshot` |
-| ERC-8330 | Subject-Linked NAV Snapshot Oracle | `packages/erc-nav-oracle` |
+| ERC&nbsp;Number | Standard | Specification | Discussion | Reference&nbsp;Package |
+|------------|----------|---------------|------------|-------------------|
+| [`ERC-8325`](https://github.com/ethereum/ERCs/pull/1853) | Asset&nbsp;Anchor&nbsp;Registry | [spec](https://github.com/ethereum/ERCs/pull/1853/files) | [Magicians](https://ethereum-magicians.org/t/erc-8325-asset-anchor-registry-interface/28934) | <a href="./packages/erc-asset-registry"><code>erc&#8209;asset&#8209;registry</code></a> |
+| [`ERC-8326`](https://github.com/ethereum/ERCs/pull/1854) | Canonical&nbsp;Document&nbsp;Bundle&nbsp;Anchor | [spec](https://github.com/ethereum/ERCs/pull/1854/files) | [Magicians](https://ethereum-magicians.org/t/erc-8326-canonical-document-bundle-anchor/28935) | <a href="./packages/erc-document-bundle-anchor"><code>erc&#8209;document&#8209;bundle&#8209;anchor</code></a> |
+| [`ERC-8327`](https://github.com/ethereum/ERCs/pull/1855) | Directional&nbsp;Transfer&nbsp;Domain&nbsp;Registry | [spec](https://github.com/ethereum/ERCs/pull/1855/files) | [Magicians](https://ethereum-magicians.org/t/erc-8327-directional-transfer-domain-registry/28936) | <a href="./packages/erc-transfer-domain"><code>erc&#8209;transfer&#8209;domain</code></a> |
+| [`ERC-8328`](https://github.com/ethereum/ERCs/pull/1856) | Subject&#8209;Linked&nbsp;Compliance&nbsp;Event&nbsp;Log | [spec](https://github.com/ethereum/ERCs/pull/1856/files) | [Magicians](https://ethereum-magicians.org/t/erc-8328-subject-linked-compliance-event-log/28937) | <a href="./packages/erc-compliance-event-log"><code>erc&#8209;compliance&#8209;event&#8209;log</code></a> |
+| [`ERC-8329`](https://github.com/ethereum/ERCs/pull/1857) | Subject&#8209;Linked&nbsp;Impact&nbsp;Snapshot&nbsp;Log | [spec](https://github.com/ethereum/ERCs/pull/1857/files) | [Magicians](https://ethereum-magicians.org/t/erc-8329-subject-linked-impact-snapshot-log/28938) | <a href="./packages/erc-impact-snapshot"><code>erc&#8209;impact&#8209;snapshot</code></a> |
+| [`ERC-8330`](https://github.com/ethereum/ERCs/pull/1858) | Subject&#8209;Linked&nbsp;NAV&nbsp;Snapshot&nbsp;Oracle | [spec](https://github.com/ethereum/ERCs/pull/1858/files) | [Magicians](https://ethereum-magicians.org/t/erc-8330-subject-linked-nav-snapshot-oracle/28939) | <a href="./packages/erc-nav-oracle"><code>erc&#8209;nav&#8209;oracle</code></a> |
+
+Review aids: [example UI suite](https://kuladao.github.io/titled-asset-standards-ui/suite/), [technical white paper](./specs/Title%20Tokenisation%20Technical%20White%20Paper.pdf), and [Verichains security review](./docs/security).
 
 ---
 
@@ -55,7 +51,7 @@ equivalent operational controls.
 
 ## Specification
 
-### ERC-8325 Asset Anchor Registry
+### [ERC-8325 Asset Anchor Registry](./packages/erc-asset-registry)
 
 Binds a dual-hash anchor — a legal document commitment and an evidence commitment — to a token contract or token ID. The `anchorId` is deterministic (`keccak256(abi.encode(legalHash, evidenceHash))`) and serves as the canonical on-chain identity for an asset across all companion standards.
 
@@ -104,7 +100,7 @@ REGISTER ──► ACTIVE ──► EXPIRED (expiresAt reached)
 
 ---
 
-### ERC-8326 Canonical Document Bundle Anchor
+### [ERC-8326 Canonical Document Bundle Anchor](./packages/erc-document-bundle-anchor)
 
 Anchors a deterministic, order-independent bundle hash derived from a set of document entries to a `(subjectId, role)` namespace with full supersession history. The bundle hash is computed off-chain using `BundleHashLib`, which applies a total order over all five leaf fields before hashing so that any permutation of the same document set produces the same hash.
 
@@ -155,7 +151,7 @@ Superseded records remain permanently queryable. `activeBundle(subjectId, role)`
 
 ---
 
-### ERC-8327 Directional Transfer Domain Registry
+### [ERC-8327 Directional Transfer Domain Registry](./packages/erc-transfer-domain)
 
 A token-agnostic registry for answering whether a route from `sourceDomain` to `destinationDomain` is permitted for a given `assetClass`. Domains and asset classes are opaque `bytes32` identifiers. The registry does not define what a domain means or enforce transfers — it is a lookup layer.
 
@@ -197,13 +193,49 @@ Route key derivation: `keccak256(abi.encodePacked(sourceDomain, destinationDomai
 
 ---
 
-### ERC-8328 Subject-Linked Compliance Event Log
+### [ERC-8328 Subject-Linked Compliance Event Log](./packages/erc-compliance-event-log)
 
-An append-only on-chain log of structured compliance events bound to a `(subjectId, eventType)` namespace. Each event carries an evidence hash, a structured payload hash, and a timestamp, giving regulators and auditors a tamper-evident audit trail independent of any specific token standard.
+An append-only on-chain log of structured compliance events bound to a `(subjectId, eventType)` namespace. Each event carries recorder attribution, claimed authority, parties, outcome, evidence hash, payload profile, payload bytes, and both occurrence and recording timestamps. This gives regulators, custodians, and auditors a tamper-evident compliance trail independent of any specific token standard.
+
+Events are never overwritten. Corrections are recorded as new events using `EVT_CORRECTION`, and the corrected record points to the correcting event through `correctedByIndex`. Consumers can resolve the terminal event with `currentEventIndex(subjectId, eventIndex)` or check whether a record remains current with `isEventCurrent`.
+
+The log is deliberately not a compliance rule engine. It records what an authorized actor asserted happened, with evidence and structured payloads, while applications remain responsible for enforcing policy before recording events. Type-specific counters and ordinal getters allow consumers to iterate events such as KYC approvals, freezes, sanctions hits, route checks, or forced transfers without scanning the full subject history.
+
+**Core interface:**
+
+```solidity
+interface IComplianceEventLog {
+    function recordEvent(
+        bytes32 subjectId,
+        bytes32 subjectType,
+        bytes32 eventType,
+        bytes32 outcome,
+        bytes32 authority,
+        Party[] calldata parties,
+        bytes32 evidenceHash,
+        string calldata evidenceURI,
+        bytes32 payloadProfileId,
+        bytes calldata payload,
+        bytes32 operationRef,
+        uint64 occurredAt,
+        uint256 correctsIndex
+    ) external returns (uint256 eventIndex);
+
+    function currentEventIndex(bytes32 subjectId, uint256 eventIndex)
+        external
+        view
+        returns (uint256);
+
+    function eventByTypeAt(bytes32 subjectId, bytes32 eventType, uint256 ordinal)
+        external
+        view
+        returns (uint256 eventIndex);
+}
+```
 
 ---
 
-### ERC-8329 Subject-Linked Impact Snapshot Log
+### [ERC-8329 Subject-Linked Impact Snapshot Log](./packages/erc-impact-snapshot)
 
 An append-only on-chain log that binds structured, auditable impact data to a `(subjectId, indicatorId)` namespace. Snapshots form immutable correction chains — a superseding snapshot links back to its predecessor, and `currentSnapshotForPeriod` walks the chain to the terminal value. Attestors independently endorse snapshots without ability to modify them. Methodology versioning is future-only: `effectiveFromOrdinal >= indicatorSnapshotCount` at the time of supersession.
 
@@ -260,7 +292,7 @@ interface IMethodologyVersioning {
 
 ---
 
-### ERC-8330 Subject-Linked NAV Snapshot Oracle
+### [ERC-8330 Subject-Linked NAV Snapshot Oracle](./packages/erc-nav-oracle)
 
 A subject-keyed, provider-attributed NAV snapshot oracle with quorum-based aggregation, decimal normalization, fork-free correction chains, and explicit publication and valuation staleness. NAV snapshots are keyed by `(subjectId, currency)`.
 
