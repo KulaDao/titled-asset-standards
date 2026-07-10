@@ -196,15 +196,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          RELEASE_JSON=$(curl -fsSL https://api.github.com/repos/crytic/medusa/releases/latest)
-          MEDUSA_URL=$(echo "$RELEASE_JSON" | grep browser_download_url | cut -d '"' -f 4 | grep -Ei 'linux.*(amd64|x64|x86_64).*\.tar\.gz$' | head -n 1 || true)
-
-          if [ -z "${MEDUSA_URL:-}" ]; then
-            echo "No suitable Linux Medusa tarball found in latest release assets."
-            exit 1
-          fi
-
-          curl -fsSL "$MEDUSA_URL" | tar -xz
+          # Pin version — avoid api.github.com (403 on Actions runners without auth).
+          MEDUSA_VERSION=v1.5.1
+          curl -fsSL \
+            "https://github.com/crytic/medusa/releases/download/${MEDUSA_VERSION}/medusa-linux-x64.tar.gz" \
+            | tar -xz
           sudo install -m 0755 medusa /usr/local/bin/medusa
           medusa --version
           python3 -m pip install --upgrade pip
