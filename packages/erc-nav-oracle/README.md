@@ -1,4 +1,6 @@
-# erc-nav-oracle
+# ERC-8330 Subject-Linked NAV Snapshot Oracle
+
+Reference implementation for ERC-8330: Subject-Linked NAV Snapshot Oracle.
 
 Subject-linked NAV snapshot oracle with provider attribution, valuation timestamps,
 methodology references, correction provenance, staleness metadata, and deterministic
@@ -44,9 +46,9 @@ median aggregation.
 - Currency IDs: `USD`, `EUR`, `GBP`, `KES`, `ZMW`
 - Token-denominated currency derivation:
   `deriveTokenCurrency(chainId, tokenAddress)`, equivalent to
-  `keccak256(abi.encodePacked("ERC-XXXX:CURRENCY:TOKEN", chainId, tokenAddress))`
+  `keccak256(abi.encodePacked("ERC-8330:CURRENCY:TOKEN", chainId, tokenAddress))`
 
-Fiat currencies use `keccak256("ERC-XXXX:CURRENCY:<ISO4217>")`. Token
+Fiat currencies use `keccak256("ERC-8330:CURRENCY:<ISO4217>")`. Token
 currencies include both `chainId` and `tokenAddress` so the same token address
 on two chains does not collide. Other custom denominations should use an
 application-documented, domain-separated string and should not reuse an ISO
@@ -137,10 +139,12 @@ slither . --config-file slither.config.json
 medusa fuzz
 ```
 
-## Known Pre-deployment Blocker
+## Assigned Namespace
 
-The constants use `ERC-XXXX` domain strings. These domain strings should be updated
-once the ERC number is assigned and before any production deployment.
+The constants use assigned `ERC-8330` domain strings. Off-chain consumers that
+hard-code NAV basis identifiers, fiat currency identifiers, token currency
+derivations, or related derived values must use the same namespace as the
+deployed contracts.
 
 ## Known Limits
 

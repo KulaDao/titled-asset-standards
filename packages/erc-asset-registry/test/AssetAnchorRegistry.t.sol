@@ -71,8 +71,8 @@ contract AssetAnchorRegistryTest is Test {
     bytes32 constant EVIDENCE_HASH = keccak256("evidence-doc-1");
     bytes32 constant LEGAL_HASH_2 = keccak256("legal-doc-2");
     bytes32 constant EVIDENCE_HASH_2 = keccak256("evidence-doc-2");
-    bytes32 constant ASSET_CLASS_EQUITY = keccak256("ERC-XXXX:ASSET_CLASS:EQUITY");
-    bytes32 constant JURISDICTION_US = keccak256("ERC-XXXX:JURISDICTION:US");
+    bytes32 constant ASSET_CLASS_EQUITY = keccak256("ERC-8325:ASSET_CLASS:EQUITY");
+    bytes32 constant JURISDICTION_US = keccak256("ERC-8325:JURISDICTION:US");
     bytes32 constant SCOPE_CONTRACT = AssetRegistryConstants.BINDING_SCOPE_CONTRACT;
     bytes32 constant SCOPE_TOKEN_ID = AssetRegistryConstants.BINDING_SCOPE_TOKEN_ID;
 

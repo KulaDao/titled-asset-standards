@@ -785,7 +785,7 @@ contract NAVSnapshotOracleTest {
 
     function test_deriveTokenCurrencyUsesChainAndTokenDomain() public pure {
         address token = address(0xC0FFEE);
-        bytes32 expected = keccak256(abi.encodePacked("ERC-XXXX:CURRENCY:TOKEN", uint256(1), token));
+        bytes32 expected = keccak256(abi.encodePacked("ERC-8330:CURRENCY:TOKEN", uint256(1), token));
 
         _assertEq(deriveTokenCurrency(1, token), expected, "token currency derivation");
     }

@@ -543,15 +543,15 @@ contract ImpactSnapshotLogTest is Test {
     // 29. test_indicatorConstants
     // -------------------------------------------------------------------------
     function test_indicatorConstants() public pure {
-        assertEq(CARBON_OFFSET, keccak256("ERC-XXXX:INDICATOR:CARBON_OFFSET"), "CARBON_OFFSET mismatch");
-        assertEq(CARBON_EMITTED, keccak256("ERC-XXXX:INDICATOR:CARBON_EMITTED"), "CARBON_EMITTED mismatch");
-        assertEq(ENERGY_GENERATED, keccak256("ERC-XXXX:INDICATOR:ENERGY_GENERATED"), "ENERGY_GENERATED mismatch");
-        assertEq(ENERGY_SAVED, keccak256("ERC-XXXX:INDICATOR:ENERGY_SAVED"), "ENERGY_SAVED mismatch");
-        assertEq(WATER_TREATED, keccak256("ERC-XXXX:INDICATOR:WATER_TREATED"), "WATER_TREATED mismatch");
-        assertEq(JOBS_CREATED, keccak256("ERC-XXXX:INDICATOR:JOBS_CREATED"), "JOBS_CREATED mismatch");
-        assertEq(BENEFICIARIES, keccak256("ERC-XXXX:INDICATOR:BENEFICIARIES"), "BENEFICIARIES mismatch");
-        assertEq(BIODIVERSITY_AREA, keccak256("ERC-XXXX:INDICATOR:BIODIVERSITY_AREA"), "BIODIVERSITY_AREA mismatch");
-        assertEq(WASTE_DIVERTED, keccak256("ERC-XXXX:INDICATOR:WASTE_DIVERTED"), "WASTE_DIVERTED mismatch");
+        assertEq(CARBON_OFFSET, keccak256("ERC-8329:INDICATOR:CARBON_OFFSET"), "CARBON_OFFSET mismatch");
+        assertEq(CARBON_EMITTED, keccak256("ERC-8329:INDICATOR:CARBON_EMITTED"), "CARBON_EMITTED mismatch");
+        assertEq(ENERGY_GENERATED, keccak256("ERC-8329:INDICATOR:ENERGY_GENERATED"), "ENERGY_GENERATED mismatch");
+        assertEq(ENERGY_SAVED, keccak256("ERC-8329:INDICATOR:ENERGY_SAVED"), "ENERGY_SAVED mismatch");
+        assertEq(WATER_TREATED, keccak256("ERC-8329:INDICATOR:WATER_TREATED"), "WATER_TREATED mismatch");
+        assertEq(JOBS_CREATED, keccak256("ERC-8329:INDICATOR:JOBS_CREATED"), "JOBS_CREATED mismatch");
+        assertEq(BENEFICIARIES, keccak256("ERC-8329:INDICATOR:BENEFICIARIES"), "BENEFICIARIES mismatch");
+        assertEq(BIODIVERSITY_AREA, keccak256("ERC-8329:INDICATOR:BIODIVERSITY_AREA"), "BIODIVERSITY_AREA mismatch");
+        assertEq(WASTE_DIVERTED, keccak256("ERC-8329:INDICATOR:WASTE_DIVERTED"), "WASTE_DIVERTED mismatch");
     }
 
     // -------------------------------------------------------------------------

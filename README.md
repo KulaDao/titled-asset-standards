@@ -14,14 +14,14 @@ Requires: EIP-165, ERC-20, ERC-721
 
 This repository contains six composable ERC specifications designed to close structural gaps in the EVM standards landscape for tokenized real-world assets. Each standard addresses a narrow, well-defined problem and can be adopted independently. Together they form a complete infrastructure layer for compliant, auditable, and interoperable tokenized assets.
 
-| Standard | Package |
-|----------|---------|
-| Asset-Bound Token Registry | `packages/erc-asset-registry` |
-| Canonical Document Bundle Anchor | `packages/erc-document-bundle-anchor` |
-| Directional Transfer Domain Registry | `packages/erc-transfer-domain` |
-| Subject-Linked Compliance Event Log | `packages/erc-compliance-event-log` |
-| Subject-Linked Impact Snapshot Log | `packages/erc-impact-snapshot` |
-| Subject-Linked NAV Snapshot Oracle | `packages/erc-nav-oracle` |
+| ERC | Standard | Package |
+|-----|----------|---------|
+| ERC-8325 | Asset Anchor Registry | `packages/erc-asset-registry` |
+| ERC-8326 | Canonical Document Bundle Anchor | `packages/erc-document-bundle-anchor` |
+| ERC-8327 | Directional Transfer Domain Registry | `packages/erc-transfer-domain` |
+| ERC-8328 | Subject-Linked Compliance Event Log | `packages/erc-compliance-event-log` |
+| ERC-8329 | Subject-Linked Impact Snapshot Log | `packages/erc-impact-snapshot` |
+| ERC-8330 | Subject-Linked NAV Snapshot Oracle | `packages/erc-nav-oracle` |
 
 ---
 
@@ -55,7 +55,7 @@ equivalent operational controls.
 
 ## Specification
 
-### Asset-Bound Token Registry
+### ERC-8325 Asset Anchor Registry
 
 Binds a dual-hash anchor — a legal document commitment and an evidence commitment — to a token contract or token ID. The `anchorId` is deterministic (`keccak256(abi.encode(legalHash, evidenceHash))`) and serves as the canonical on-chain identity for an asset across all companion standards.
 
@@ -104,7 +104,7 @@ REGISTER ──► ACTIVE ──► EXPIRED (expiresAt reached)
 
 ---
 
-### Canonical Document Bundle Anchor
+### ERC-8326 Canonical Document Bundle Anchor
 
 Anchors a deterministic, order-independent bundle hash derived from a set of document entries to a `(subjectId, role)` namespace with full supersession history. The bundle hash is computed off-chain using `BundleHashLib`, which applies a total order over all five leaf fields before hashing so that any permutation of the same document set produces the same hash.
 
@@ -155,7 +155,7 @@ Superseded records remain permanently queryable. `activeBundle(subjectId, role)`
 
 ---
 
-### Directional Transfer Domain Registry
+### ERC-8327 Directional Transfer Domain Registry
 
 A token-agnostic registry for answering whether a route from `sourceDomain` to `destinationDomain` is permitted for a given `assetClass`. Domains and asset classes are opaque `bytes32` identifiers. The registry does not define what a domain means or enforce transfers — it is a lookup layer.
 
@@ -197,13 +197,13 @@ Route key derivation: `keccak256(abi.encodePacked(sourceDomain, destinationDomai
 
 ---
 
-### Subject-Linked Compliance Event Log
+### ERC-8328 Subject-Linked Compliance Event Log
 
 An append-only on-chain log of structured compliance events bound to a `(subjectId, eventType)` namespace. Each event carries an evidence hash, a structured payload hash, and a timestamp, giving regulators and auditors a tamper-evident audit trail independent of any specific token standard.
 
 ---
 
-### Subject-Linked Impact Snapshot Log
+### ERC-8329 Subject-Linked Impact Snapshot Log
 
 An append-only on-chain log that binds structured, auditable impact data to a `(subjectId, indicatorId)` namespace. Snapshots form immutable correction chains — a superseding snapshot links back to its predecessor, and `currentSnapshotForPeriod` walks the chain to the terminal value. Attestors independently endorse snapshots without ability to modify them. Methodology versioning is future-only: `effectiveFromOrdinal >= indicatorSnapshotCount` at the time of supersession.
 
@@ -256,11 +256,11 @@ interface IMethodologyVersioning {
 
 **Correction chain:** `correctsIndex = NO_CORRECTION` (`type(uint256).max`) for original snapshots. A correction must match the target's `indicatorId`, `periodStart`, and `periodEnd`. Fork prevention is enforced — each snapshot can be corrected at most once.
 
-**Canonical indicators** (domain-separated via `keccak256("ERC-XXXX:INDICATOR:<name>")`): `CARBON_OFFSET`, `CARBON_EMITTED`, `ENERGY_GENERATED`, `ENERGY_SAVED`, `WATER_TREATED`, `JOBS_CREATED`, `BENEFICIARIES`, `BIODIVERSITY_AREA`, `WASTE_DIVERTED`.
+**Canonical indicators** (domain-separated via `keccak256("ERC-8329:INDICATOR:<name>")`): `CARBON_OFFSET`, `CARBON_EMITTED`, `ENERGY_GENERATED`, `ENERGY_SAVED`, `WATER_TREATED`, `JOBS_CREATED`, `BENEFICIARIES`, `BIODIVERSITY_AREA`, `WASTE_DIVERTED`.
 
 ---
 
-### Subject-Linked NAV Snapshot Oracle
+### ERC-8330 Subject-Linked NAV Snapshot Oracle
 
 A subject-keyed, provider-attributed NAV snapshot oracle with quorum-based aggregation, decimal normalization, fork-free correction chains, and explicit publication and valuation staleness. NAV snapshots are keyed by `(subjectId, currency)`.
 
@@ -398,19 +398,19 @@ The NAV oracle is a permissioned oracle. `PROVIDER_ROLE` holders are trusted to 
 
 Transfer domain registry grace period revocation, impact snapshot log `reportedAt`, and NAV oracle publication timestamps all use `block.timestamp`. Validators can shift this by up to approximately 12 seconds. None of the standards use `block.timestamp` for randomness or for security-critical timing that would be exploitable within a 12-second window.
 
-### ERC number placeholders
+### Assigned ERC namespaces
 
-Domain-separated constants across this repository use `ERC-XXXX` placeholders that must be replaced with assigned ERC numbers before production deployment. Update all of the following together — any unchanged placeholder changes the `keccak256` of canonical identifiers:
+Domain-separated constants across this repository use the assigned ERC numbers below. Update source, tests, docs, and any off-chain consumers together if these namespaces ever change; any namespace change changes the `keccak256` of canonical identifiers.
 
-| Package | Library |
-|---------|---------|
-| `erc-asset-registry` | `AssetRegistryConstants.sol` |
-| `erc-document-bundle-anchor` | `BundleHashLib.sol` |
-| `erc-compliance-event-log` | `ComplianceConstants.sol` |
-| `erc-impact-snapshot` | `ImpactConstants.sol` |
-| `erc-nav-oracle` | `NAVConstants.sol` |
+| Package | ERC | Library |
+|---------|-----|---------|
+| `erc-asset-registry` | ERC-8325 | `AssetRegistryConstants.sol` |
+| `erc-document-bundle-anchor` | ERC-8326 | `BundleHashLib.sol` |
+| `erc-compliance-event-log` | ERC-8328 | `ComplianceConstants.sol` |
+| `erc-impact-snapshot` | ERC-8329 | `ImpactConstants.sol` |
+| `erc-nav-oracle` | ERC-8330 | `NAVConstants.sol` |
 
-**Do not deploy to production until every `ERC-XXXX` string in those files (and matching tests/docs) is updated.** Off-chain consumers that hard-code indicator IDs, event types, bundle schema hashes, etc. must be updated in the same release.
+Off-chain consumers that hard-code indicator IDs, event types, bundle schema hashes, NAV basis identifiers, currency identifiers, or similar derived values must use the assigned namespace strings in the same release as the contracts they index.
 
 ---
 
