@@ -28,8 +28,8 @@ contract RegistryHandler is Test {
 
     mapping(bytes32 => bytes32) public anchorByTokenBinding;
 
-    bytes32 internal constant ASSET_CLASS_EQUITY = keccak256("ERC-XXXX:ASSET_CLASS:EQUITY");
-    bytes32 internal constant JURISDICTION_US = keccak256("ERC-XXXX:JURISDICTION:US");
+    bytes32 internal constant ASSET_CLASS_EQUITY = keccak256("ERC-8325:ASSET_CLASS:EQUITY");
+    bytes32 internal constant JURISDICTION_US = keccak256("ERC-8325:JURISDICTION:US");
     bytes32 internal constant SCOPE_CONTRACT = AssetRegistryConstants.BINDING_SCOPE_CONTRACT;
     bytes32 internal constant SCOPE_TOKEN_ID = AssetRegistryConstants.BINDING_SCOPE_TOKEN_ID;
 

@@ -1,6 +1,6 @@
-# erc-transfer-domain
+# ERC-8327 Directional Transfer Domain Registry
 
-Reference implementation for **Directional Transfer Domain Registry**.
+Reference implementation for ERC-8327: Directional Transfer Domain Registry.
 
 This package implements a token-agnostic registry for answering one narrow
 question:

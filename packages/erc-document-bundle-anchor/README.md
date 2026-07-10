@@ -1,4 +1,6 @@
-# erc-document-bundle-anchor
+# ERC-8326 Canonical Document Bundle Anchor
+
+Reference implementation for ERC-8326: Canonical Document Bundle Anchor.
 
 On-chain anchor that binds a deterministic bundle hash (derived from a set of document entries) to a `(subjectId, role)` namespace, with full lifecycle management and permanent supersession history.
 
@@ -76,7 +78,7 @@ anchorBundle() ──► ACTIVE ──► supersedeBundle() ──► SUPERSEDED
 `subjectId == bytes32(0)` and `role == bytes32(0)` are invalid in the
 reference implementation. Applications that need standalone anchoring should
 derive a nonzero subject identifier from application context, such as
-`keccak256(abi.encodePacked("ERC-XXXX:DOCUMENT_SUBJECT", msg.sender, nonce))`,
+`keccak256(abi.encodePacked("ERC-8326:DOCUMENT_SUBJECT", msg.sender, nonce))`,
 rather than sharing a zero namespace.
 
 `metadataURI` may be empty. An empty URI means the anchor stores the bundle commitment and document count without an on-chain retrieval pointer. Deployments that require off-chain document availability SHOULD require a non-empty URI at the application layer.
@@ -136,16 +138,15 @@ forge test --match-contract DocumentBundleAnchorInvariantTest
 medusa fuzz                         # requires medusa.json
 ```
 
-## Known Pre-deployment Blocker
+## Assigned Namespace
 
-`BundleHashLib.SCHEMA_V1 = keccak256("ERC-XXXX:BUNDLE:V1")` contains a placeholder ERC number. **This hash will change** when the ERC number is assigned — update `SCHEMA_V1` before any production deployment.
+`BundleHashLib.SCHEMA_V1 = keccak256("ERC-8326:BUNDLE:V1")` uses the assigned ERC-8326 namespace. Any namespace change changes the derived bundle schema hash and must be coordinated with tests, docs, fixtures, and off-chain consumers.
 
-Pre-submission checklist:
+Pre-review checklist:
 
-- Replace every `ERC-XXXX` namespace constant with the assigned ERC number.
 - Regenerate and publish normative test vectors after the namespace update.
 - Confirm reference implementation repository links and fixture hashes before Review status.
 
 ## Companion standards
 
-The `subjectId` used here is designed to be the `anchorId` returned by the **Asset-Bound Token Registry** (`erc-asset-registry`), linking document bundles directly to on-chain asset anchors.
+The `subjectId` used here is designed to be the `anchorId` returned by the **ERC-8325 Asset Anchor Registry** (`erc-asset-registry`), linking document bundles directly to on-chain asset anchors.

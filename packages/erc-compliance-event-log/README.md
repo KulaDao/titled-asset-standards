@@ -1,4 +1,6 @@
-# erc-compliance-event-log
+# ERC-8328 Subject-Linked Compliance Event Log
+
+Reference implementation for ERC-8328: Subject-Linked Compliance Event Log.
 
 Subject-linked compliance event log with actor attribution, claimed authority,
 evidence links, payload profiles, type indexing, and correction provenance.
@@ -105,7 +107,9 @@ slither . --config-file slither.config.json
 medusa fuzz
 ```
 
-## Known Pre-deployment Blocker
+## Assigned Namespace
 
-The constants use `ERC-XXXX` domain strings. These domain strings should be
-updated once the ERC number is assigned and before any production deployment.
+The constants use assigned `ERC-8328` domain strings. Off-chain consumers that
+hard-code subject types, event types, party roles, outcomes, authorities, or
+payload schema identifiers must use the same namespace as the deployed
+contracts.
