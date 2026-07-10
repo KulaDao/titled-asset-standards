@@ -5,6 +5,12 @@ Reference implementation for ERC-8328: Subject-Linked Compliance Event Log.
 Subject-linked compliance event log with actor attribution, claimed authority,
 evidence links, payload profiles, type indexing, and correction provenance.
 
+## Specification
+
+- [ERC-8328 Subject-Linked Compliance Event Log](https://github.com/ethereum/ERCs/pull/1856/files)
+- [Ethereum Magicians discussion](https://ethereum-magicians.org/t/erc-8328-subject-linked-compliance-event-log/28937)
+- [ERC PR](https://github.com/ethereum/ERCs/pull/1856)
+
 ## Interfaces
 
 | Interface | Purpose |

@@ -4,6 +4,12 @@ Reference implementation for ERC-8329: Subject-Linked Impact Snapshot Log.
 
 On-chain append-only impact snapshot log that binds structured, auditable impact data to a `(subjectId, indicatorId)` namespace, with correction chains, role-gated attestation, and methodology versioning.
 
+## Specification
+
+- [ERC-8329 Subject-Linked Impact Snapshot Log](https://github.com/ethereum/ERCs/pull/1857/files)
+- [Ethereum Magicians discussion](https://ethereum-magicians.org/t/erc-8329-subject-linked-impact-snapshot-log/28938)
+- [ERC PR](https://github.com/ethereum/ERCs/pull/1857)
+
 ## Interfaces
 
 | Interface | Purpose | License |
