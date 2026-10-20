@@ -15,7 +15,7 @@ contract NAVSnapshotOracleFuzzTest {
         oracle = new NAVSnapshotOracle(address(this));
         oracle.setNAVBasis(SUBJECT, USD, PER_SHARE);
         oracle.setStalenessConfig(SUBJECT, USD, 1 days, 30 days);
-        oracle.setAggregationConfig(SUBJECT, USD, 1, 10_000);
+        oracle.setAggregationConfig(SUBJECT, USD, 1, 10_000, 1 days);
     }
 
     function publish(uint128 rawNav, uint8 decimals) external {
@@ -88,11 +88,38 @@ contract NAVSnapshotOracleFuzzTest {
         return oracle.providerSnapshotCount(SUBJECT, USD, address(this)) == oracle.snapshotCount(SUBJECT, USD);
     }
 
-    function property_aggregationProviderCountMatchesQuorumGroup() external view returns (bool) {
+    function property_freshAggregationMedianLiesWithinFreshSubmissionRange() external view returns (bool) {
         uint256 count = oracle.snapshotCount(SUBJECT, USD);
         if (count == 0) return true;
 
-        (,,,, uint256 providerCount,,) = oracle.aggregatedNAV(SUBJECT, USD);
-        return providerCount == oracle.providerSubmissionCount(SUBJECT, USD);
+        uint256 freshCount = oracle.freshProviderSubmissionCount(SUBJECT, USD);
+        if (freshCount < oracle.quorum(SUBJECT, USD)) return true;
+
+        (int256 median, uint8 maxDecimals,,,,) = oracle.aggregatedNAV(SUBJECT, USD);
+        int256 minValue = type(int256).max;
+        int256 maxValue = type(int256).min;
+
+        for (uint256 i = 0; i < freshCount; i++) {
+            (,, int256 nav, uint8 decimals,,,) = oracle.freshProviderSubmissionAt(SUBJECT, USD, i);
+            int256 normalized = nav * int256(10 ** uint256(maxDecimals - decimals));
+            if (normalized < minValue) minValue = normalized;
+            if (normalized > maxValue) maxValue = normalized;
+        }
+
+        return median >= minValue && median <= maxValue;
+    }
+
+    function property_aggregationAvailabilityMatchesFreshQuorum() external view returns (bool) {
+        uint256 count = oracle.snapshotCount(SUBJECT, USD);
+        if (count == 0) return true;
+
+        uint256 freshCount = oracle.freshProviderSubmissionCount(SUBJECT, USD);
+        bool shouldAggregate = freshCount >= oracle.quorum(SUBJECT, USD);
+
+        try oracle.aggregatedNAV(SUBJECT, USD) returns (int256, uint8, bytes32, uint64, uint256, bool) {
+            return shouldAggregate;
+        } catch {
+            return !shouldAggregate;
+        }
     }
 }

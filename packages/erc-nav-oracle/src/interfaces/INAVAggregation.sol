@@ -12,11 +12,20 @@ interface INAVAggregation {
     );
 
     event AggregationConfigUpdated(
-        bytes32 indexed subjectId, bytes32 indexed currency, uint256 quorum, uint256 deviationThresholdBps
+        bytes32 indexed subjectId,
+        bytes32 indexed currency,
+        uint256 quorum,
+        uint256 deviationThresholdBps,
+        uint64 maxSubmissionAge
     );
 
-    function setAggregationConfig(bytes32 subjectId, bytes32 currency, uint256 quorum, uint256 deviationThresholdBps)
-        external;
+    function setAggregationConfig(
+        bytes32 subjectId,
+        bytes32 currency,
+        uint256 quorum,
+        uint256 deviationThresholdBps,
+        uint64 maxSubmissionAge
+    ) external;
 
     function aggregatedNAV(bytes32 subjectId, bytes32 currency)
         external
@@ -26,8 +35,7 @@ interface INAVAggregation {
             uint8 decimals,
             bytes32 navBasis,
             uint64 valuationTimestamp,
-            uint256 providerCount,
-            bool isPublishStale,
+            uint256 freshProviderCount,
             bool isValuationStale
         );
 
@@ -46,9 +54,26 @@ interface INAVAggregation {
             uint64 publishedAt
         );
 
+    function freshProviderSubmissionCount(bytes32 subjectId, bytes32 currency) external view returns (uint256);
+
+    function freshProviderSubmissionAt(bytes32 subjectId, bytes32 currency, uint256 index)
+        external
+        view
+        returns (
+            uint256 snapshotIndex,
+            address provider,
+            int256 nav,
+            uint8 decimals,
+            bytes32 navBasis,
+            uint64 valuationTimestamp,
+            uint64 publishedAt
+        );
+
     function latestAggregationTimestamp(bytes32 subjectId, bytes32 currency) external view returns (uint64);
 
     function quorum(bytes32 subjectId, bytes32 currency) external view returns (uint256);
 
     function deviationThreshold(bytes32 subjectId, bytes32 currency) external view returns (uint256);
+
+    function maxSubmissionAge(bytes32 subjectId, bytes32 currency) external view returns (uint64);
 }
