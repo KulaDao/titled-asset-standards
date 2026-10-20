@@ -26,14 +26,28 @@ interface INAVAggregation {
             uint8 decimals,
             bytes32 navBasis,
             uint64 valuationTimestamp,
-            uint256 providerCount,
-            bool isPublishStale,
+            uint256 freshProviderCount,
             bool isValuationStale
         );
 
     function providerSubmissionCount(bytes32 subjectId, bytes32 currency) external view returns (uint256);
 
     function providerSubmissionAt(bytes32 subjectId, bytes32 currency, uint256 index)
+        external
+        view
+        returns (
+            uint256 snapshotIndex,
+            address provider,
+            int256 nav,
+            uint8 decimals,
+            bytes32 navBasis,
+            uint64 valuationTimestamp,
+            uint64 publishedAt
+        );
+
+    function freshProviderSubmissionCount(bytes32 subjectId, bytes32 currency) external view returns (uint256);
+
+    function freshProviderSubmissionAt(bytes32 subjectId, bytes32 currency, uint256 index)
         external
         view
         returns (

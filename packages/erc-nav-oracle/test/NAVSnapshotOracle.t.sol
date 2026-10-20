@@ -472,7 +472,6 @@ contract NAVSnapshotOracleTest {
             bytes32 basis,
             uint64 valuationTimestamp,
             uint256 providerCount,
-            bool publishStale,
             bool valuationStale
         ) = oracle.aggregatedNAV(SUBJECT, USD);
 
@@ -481,7 +480,6 @@ contract NAVSnapshotOracleTest {
         _assertEq(basis, PER_SHARE, "aggregation basis");
         _assertEq(valuationTimestamp, T1, "latest quorum timestamp");
         _assertEq(providerCount, 2, "provider count");
-        _assertFalse(publishStale, "publish not stale");
         _assertFalse(valuationStale, "valuation not stale");
     }
 
@@ -531,7 +529,7 @@ contract NAVSnapshotOracleTest {
 
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, NO_CORRECTION);
 
-        (,, bytes32 basis,,,,) = oracle.aggregatedNAV(SUBJECT, USD);
+        (,, bytes32 basis,,,) = oracle.aggregatedNAV(SUBJECT, USD);
         _assertEq(basis, PER_SHARE, "aggregation basis");
     }
 
@@ -561,7 +559,7 @@ contract NAVSnapshotOracleTest {
 
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, NO_CORRECTION);
 
-        (int256 nav,, bytes32 basis,,,,) = oracle.aggregatedNAV(SUBJECT, USD);
+        (int256 nav,, bytes32 basis,,,) = oracle.aggregatedNAV(SUBJECT, USD);
         _assertEq(nav, 100, "lower median after valid provider submission");
         _assertEq(basis, PER_SHARE, "stream basis after rejected mismatch");
     }
@@ -576,7 +574,7 @@ contract NAVSnapshotOracleTest {
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 200, 2, T0, METHOD_1, NO_CORRECTION);
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 120, 2, T0, METHOD_2, 1);
 
-        (int256 nav,,,,,,) = oracle.aggregatedNAV(SUBJECT, USD);
+        (int256 nav,,,,,) = oracle.aggregatedNAV(SUBJECT, USD);
         _assertEq(nav, 100, "lower median uses corrected terminal values");
 
         (uint256 snapshotIndex, address provider, int256 submissionNav,,,,) =
@@ -584,6 +582,60 @@ contract NAVSnapshotOracleTest {
         _assertEq(snapshotIndex, 2, "corrected provider snapshot index");
         _assertEq(provider, PROVIDER_B, "corrected provider");
         _assertEq(submissionNav, 120, "corrected provider nav");
+    }
+
+    function test_aggregationRequiresFreshQuorumAndExposesFreshContributors() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 1 days, 30 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 200, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T0) + 1 days + 1);
+        uint256 correctedA = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 125, 2, T0, METHOD_2, 0);
+
+        _assertEq(oracle.providerSubmissionCount(SUBJECT, USD), 2, "full eligible provider count");
+        _assertEq(oracle.freshProviderSubmissionCount(SUBJECT, USD), 1, "one fresh provider");
+        vm.expectRevert(bytes("NAVSnapshotOracle: fresh quorum not met"));
+        oracle.aggregatedNAV(SUBJECT, USD);
+
+        uint256 correctedB = _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 175, 2, T0, METHOD_2, 1);
+        _assertEq(oracle.freshProviderSubmissionCount(SUBJECT, USD), 2, "fresh quorum provider count");
+
+        (uint256 snapshotIndexA, address providerA, int256 navA,,,,) = oracle.freshProviderSubmissionAt(SUBJECT, USD, 0);
+        (uint256 snapshotIndexB, address providerB, int256 navB,,,,) = oracle.freshProviderSubmissionAt(SUBJECT, USD, 1);
+        _assertEq(snapshotIndexA, correctedA, "first fresh correction index");
+        _assertEq(providerA, PROVIDER_A, "first fresh provider");
+        _assertEq(navA, 125, "first fresh nav");
+        _assertEq(snapshotIndexB, correctedB, "second fresh correction index");
+        _assertEq(providerB, PROVIDER_B, "second fresh provider");
+        _assertEq(navB, 175, "second fresh nav");
+
+        (int256 nav,,,, uint256 freshProviderCount, bool valuationStale) = oracle.aggregatedNAV(SUBJECT, USD);
+        _assertEq(nav, 125, "lower median uses fresh values");
+        _assertEq(freshProviderCount, 2, "returned fresh provider count");
+        _assertFalse(valuationStale, "valuation remains current");
+    }
+
+    function test_aggregationDoesNotFallbackToOlderFreshValuationTimestamp() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 1 days, 30 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 200, 2, T1, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 201, 2, T1, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T1) + 1 days + 1);
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, NO_CORRECTION);
+
+        _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T1, "latest valuation remains selected");
+        _assertEq(oracle.freshProviderSubmissionCount(SUBJECT, USD), 0, "latest valuation has no fresh providers");
+        vm.expectRevert(bytes("NAVSnapshotOracle: fresh quorum not met"));
+        oracle.aggregatedNAV(SUBJECT, USD);
     }
 
     function test_deviationEventEmitsFromPublishPath() public {
@@ -638,8 +690,7 @@ contract NAVSnapshotOracleTest {
         _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T0, "aggregation falls back to prior quorum");
         _assertEq(oracle.providerSubmissionCount(SUBJECT, USD), 2, "prior quorum provider count");
 
-        (int256 aggregatedNav,,, uint64 valuationTimestamp, uint256 providerCount,,) =
-            oracle.aggregatedNAV(SUBJECT, USD);
+        (int256 aggregatedNav,,, uint64 valuationTimestamp, uint256 providerCount,) = oracle.aggregatedNAV(SUBJECT, USD);
         _assertEq(aggregatedNav, 100, "prior quorum median");
         _assertEq(valuationTimestamp, T0, "prior quorum timestamp");
         _assertEq(providerCount, 2, "aggregation provider count");

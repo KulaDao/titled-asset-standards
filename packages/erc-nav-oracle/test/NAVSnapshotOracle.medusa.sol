@@ -92,7 +92,9 @@ contract NAVSnapshotOracleFuzzTest {
         uint256 count = oracle.snapshotCount(SUBJECT, USD);
         if (count == 0) return true;
 
-        (,,,, uint256 providerCount,,) = oracle.aggregatedNAV(SUBJECT, USD);
-        return providerCount == oracle.providerSubmissionCount(SUBJECT, USD);
+        if (oracle.freshProviderSubmissionCount(SUBJECT, USD) < oracle.quorum(SUBJECT, USD)) return true;
+
+        (,,,, uint256 freshProviderCount,) = oracle.aggregatedNAV(SUBJECT, USD);
+        return freshProviderCount == oracle.freshProviderSubmissionCount(SUBJECT, USD);
     }
 }

@@ -401,23 +401,16 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             uint8 decimals,
             bytes32 navBasis,
             uint64 valuationTimestamp,
-            uint256 providerCount,
-            bool isPublishStale,
+            uint256 freshProviderCount,
             bool isValuationStale
         )
     {
         bytes32 streamKey = _streamKey(subjectId, currency);
-        AggregatedSet memory set = _aggregatedSet(streamKey);
-        (isPublishStale, isValuationStale) = _stalenessStatus(streamKey, set.latestPublishedAt, set.valuationTimestamp);
-        return (
-            set.medianNav,
-            set.decimals,
-            set.navBasis,
-            set.valuationTimestamp,
-            set.providerCount,
-            isPublishStale,
-            isValuationStale
-        );
+        uint64 valuationTimestamp_ = _latestAggregationTimestamp(streamKey);
+        StalenessConfig memory config = _configuredStalenessConfig(streamKey);
+        AggregatedSet memory set = _freshAggregatedSet(streamKey, valuationTimestamp_, config.heartbeat);
+        isValuationStale = block.timestamp > uint256(set.valuationTimestamp) + uint256(config.maxValuationAge);
+        return (set.medianNav, set.decimals, set.navBasis, set.valuationTimestamp, set.providerCount, isValuationStale);
     }
 
     function providerSubmissionCount(bytes32 subjectId, bytes32 currency) external view returns (uint256) {
@@ -466,6 +459,59 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         revert("NAVSnapshotOracle: submission index out of range");
     }
 
+    function freshProviderSubmissionCount(bytes32 subjectId, bytes32 currency) external view returns (uint256) {
+        bytes32 streamKey = _streamKey(subjectId, currency);
+        uint64 heartbeat_ = _configuredHeartbeat(streamKey);
+        uint64 timestamp = _latestAggregationTimestamp(streamKey);
+        return _freshProviderCount(streamKey, timestamp, heartbeat_);
+    }
+
+    function freshProviderSubmissionAt(bytes32 subjectId, bytes32 currency, uint256 index)
+        external
+        view
+        returns (
+            uint256 snapshotIndex,
+            address provider,
+            int256 nav,
+            uint8 decimals,
+            bytes32 navBasis,
+            uint64 valuationTimestamp,
+            uint64 publishedAt
+        )
+    {
+        bytes32 streamKey = _streamKey(subjectId, currency);
+        uint64 heartbeat_ = _configuredHeartbeat(streamKey);
+        uint64 timestamp = _latestAggregationTimestamp(streamKey);
+        uint256 seen;
+        address[] storage providers = _timestampProviders[streamKey][timestamp];
+
+        for (uint256 i = 0; i < providers.length; i++) {
+            uint256 plusOne = _providerTimestampSnapshotPlusOne[streamKey][timestamp][providers[i]];
+            if (plusOne == 0) continue;
+            NAVSnapshot storage snap = _snapshots[streamKey][plusOne - 1];
+            if (
+                !_isEligibleTerminalSnapshot(streamKey, plusOne - 1)
+                    || !_isPublicationFresh(snap.publishedAt, heartbeat_)
+            ) {
+                continue;
+            }
+            if (seen == index) {
+                return (
+                    plusOne - 1,
+                    snap.provider,
+                    snap.nav,
+                    snap.decimals,
+                    snap.navBasis,
+                    snap.valuationTimestamp,
+                    snap.publishedAt
+                );
+            }
+            seen++;
+        }
+
+        revert("NAVSnapshotOracle: fresh submission index out of range");
+    }
+
     function latestAggregationTimestamp(bytes32 subjectId, bytes32 currency) external view returns (uint64) {
         return _latestAggregationTimestamp(_streamKey(subjectId, currency));
     }
@@ -488,7 +534,6 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         uint8 decimals;
         bytes32 navBasis;
         uint64 valuationTimestamp;
-        uint64 latestPublishedAt;
         uint256 providerCount;
         int256 minNav;
         int256 maxNav;
@@ -598,12 +643,25 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         view
         returns (bool isPublishStale, bool isValuationStale)
     {
-        StalenessConfig memory config = _stalenessConfigs[streamKey];
-        require(config.heartbeat != 0, "NAVSnapshotOracle: heartbeat unconfigured");
-        require(config.maxValuationAge != 0, "NAVSnapshotOracle: maxValuationAge unconfigured");
+        StalenessConfig memory config = _configuredStalenessConfig(streamKey);
 
         isPublishStale = block.timestamp > uint256(publishedAt) + uint256(config.heartbeat);
         isValuationStale = block.timestamp > uint256(valuationTimestamp) + uint256(config.maxValuationAge);
+    }
+
+    function _configuredStalenessConfig(bytes32 streamKey) internal view returns (StalenessConfig memory config) {
+        config = _stalenessConfigs[streamKey];
+        require(config.heartbeat != 0, "NAVSnapshotOracle: heartbeat unconfigured");
+        require(config.maxValuationAge != 0, "NAVSnapshotOracle: maxValuationAge unconfigured");
+    }
+
+    function _configuredHeartbeat(bytes32 streamKey) internal view returns (uint64 heartbeat_) {
+        heartbeat_ = _stalenessConfigs[streamKey].heartbeat;
+        require(heartbeat_ != 0, "NAVSnapshotOracle: heartbeat unconfigured");
+    }
+
+    function _isPublicationFresh(uint64 publishedAt, uint64 heartbeat_) internal view returns (bool) {
+        return block.timestamp <= uint256(publishedAt) + uint256(heartbeat_);
     }
 
     function _latestAggregationTimestamp(bytes32 streamKey) internal view returns (uint64) {
@@ -666,49 +724,32 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         }
     }
 
-    function _aggregatedSet(bytes32 streamKey) internal view returns (AggregatedSet memory set) {
-        set.valuationTimestamp = _latestAggregationTimestamp(streamKey);
-        address[] storage providers = _timestampProviders[streamKey][set.valuationTimestamp];
-        uint256 providerCount_ = _eligibleProviderCount(streamKey, set.valuationTimestamp);
-        int256[] memory values = new int256[](providerCount_);
-
-        uint8 maxDecimals;
-        uint256 used;
-        uint64 latestPublishedAt_;
-
+    function _freshProviderCount(bytes32 streamKey, uint64 valuationTimestamp, uint64 heartbeat_)
+        internal
+        view
+        returns (uint256 count)
+    {
+        address[] storage providers = _timestampProviders[streamKey][valuationTimestamp];
         for (uint256 i = 0; i < providers.length; i++) {
-            uint256 plusOne = _providerTimestampSnapshotPlusOne[streamKey][set.valuationTimestamp][providers[i]];
+            uint256 plusOne = _providerTimestampSnapshotPlusOne[streamKey][valuationTimestamp][providers[i]];
             if (plusOne == 0) continue;
-
             NAVSnapshot storage snap = _snapshots[streamKey][plusOne - 1];
-            if (!_isEligibleTerminalSnapshot(streamKey, plusOne - 1)) continue;
-
-            if (snap.decimals > maxDecimals) maxDecimals = snap.decimals;
-            if (snap.publishedAt > latestPublishedAt_) latestPublishedAt_ = snap.publishedAt;
-
-            values[used] = snap.nav;
-            used++;
+            if (
+                _isEligibleTerminalSnapshot(streamKey, plusOne - 1) && _isPublicationFresh(snap.publishedAt, heartbeat_)
+            ) {
+                count++;
+            }
         }
+    }
 
-        for (uint256 i = 0; i < providers.length; i++) {
-            uint256 plusOne = _providerTimestampSnapshotPlusOne[streamKey][set.valuationTimestamp][providers[i]];
-            if (plusOne == 0) continue;
-
-            NAVSnapshot storage snap = _snapshots[streamKey][plusOne - 1];
-            if (!_isEligibleTerminalSnapshot(streamKey, plusOne - 1)) continue;
-
-            values[--used] = _normalize(snap.nav, snap.decimals, maxDecimals);
-        }
-
-        _sort(values);
-
-        set.medianNav = values[(values.length - 1) / 2];
-        set.decimals = maxDecimals;
-        set.navBasis = _streamNavBasis[streamKey];
-        set.latestPublishedAt = latestPublishedAt_;
-        set.providerCount = values.length;
-        set.minNav = values[0];
-        set.maxNav = values[values.length - 1];
+    function _freshAggregatedSet(bytes32 streamKey, uint64 valuationTimestamp, uint64 heartbeat_)
+        internal
+        view
+        returns (AggregatedSet memory set)
+    {
+        uint256 freshCount = _freshProviderCount(streamKey, valuationTimestamp, heartbeat_);
+        require(freshCount >= _aggregationConfigs[streamKey].quorum, "NAVSnapshotOracle: fresh quorum not met");
+        return _aggregatedSetForTimestamp(streamKey, valuationTimestamp, heartbeat_);
     }
 
     function _emitDeviationIfNeeded(bytes32 streamKey, bytes32 subjectId, bytes32 currency, uint64 valuationTimestamp)
@@ -718,20 +759,22 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         if (config.quorum == 0) return;
         if (_eligibleProviderCount(streamKey, valuationTimestamp) < config.quorum) return;
 
-        AggregatedSet memory set = _aggregatedSetForTimestamp(streamKey, valuationTimestamp);
+        AggregatedSet memory set = _aggregatedSetForTimestamp(streamKey, valuationTimestamp, 0);
         uint256 deviationBps_ = _deviationBps(set.minNav, set.maxNav, set.medianNav);
         if (deviationBps_ > config.deviationThresholdBps) {
             emit NAVDeviationDetected(subjectId, currency, valuationTimestamp, set.minNav, set.maxNav, deviationBps_);
         }
     }
 
-    function _aggregatedSetForTimestamp(bytes32 streamKey, uint64 valuationTimestamp)
+    function _aggregatedSetForTimestamp(bytes32 streamKey, uint64 valuationTimestamp, uint64 heartbeat_)
         internal
         view
         returns (AggregatedSet memory set)
     {
         address[] storage providers = _timestampProviders[streamKey][valuationTimestamp];
-        uint256 providerCount_ = _eligibleProviderCount(streamKey, valuationTimestamp);
+        uint256 providerCount_ = heartbeat_ == 0
+            ? _eligibleProviderCount(streamKey, valuationTimestamp)
+            : _freshProviderCount(streamKey, valuationTimestamp, heartbeat_);
         int256[] memory values = new int256[](providerCount_);
 
         uint8 maxDecimals;
@@ -742,7 +785,10 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             if (plusOne == 0) continue;
 
             NAVSnapshot storage snap = _snapshots[streamKey][plusOne - 1];
-            if (!_isEligibleTerminalSnapshot(streamKey, plusOne - 1)) continue;
+            if (
+                !_isEligibleTerminalSnapshot(streamKey, plusOne - 1)
+                    || (heartbeat_ != 0 && !_isPublicationFresh(snap.publishedAt, heartbeat_))
+            ) continue;
 
             if (snap.decimals > maxDecimals) maxDecimals = snap.decimals;
             used++;
@@ -754,7 +800,10 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
             if (plusOne == 0) continue;
 
             NAVSnapshot storage snap = _snapshots[streamKey][plusOne - 1];
-            if (!_isEligibleTerminalSnapshot(streamKey, plusOne - 1)) continue;
+            if (
+                !_isEligibleTerminalSnapshot(streamKey, plusOne - 1)
+                    || (heartbeat_ != 0 && !_isPublicationFresh(snap.publishedAt, heartbeat_))
+            ) continue;
 
             values[used] = _normalize(snap.nav, snap.decimals, maxDecimals);
             used++;

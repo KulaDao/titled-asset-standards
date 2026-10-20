@@ -17,7 +17,7 @@ median aggregation.
 | Interface | Purpose |
 |-----------|---------|
 | `INAVSnapshotOracle` | Publish, correct, invalidate, and query NAV snapshots keyed by `(subjectId, currency)` |
-| `INAVAggregation` | Query deterministic median NAV across provider submissions |
+| `INAVAggregation` | Query deterministic lower-median NAV across a fresh provider quorum |
 
 ## Key Semantics
 
@@ -40,8 +40,8 @@ median aggregation.
   terminal snapshot in a chain and `isSnapshotCurrent(subjectId, currency,
   snapshotIndex)` to check whether a snapshot has no successor correction.
 - `latestNAVStatus()` reverts until both heartbeat and max valuation age are configured for the stream.
-- Aggregation uses the latest valuation timestamp with quorum, uses the configured stream NAV basis, normalizes decimals to the highest submitted decimal precision, and returns the lower median for even provider counts.
-- `aggregatedNAV()` also reverts until heartbeat and max valuation age are configured, since it returns staleness flags.
+- Aggregation uses the latest valuation timestamp with quorum, but includes only provider submissions still within the configured publication heartbeat. It uses the configured stream NAV basis, normalizes decimals to the highest submitted decimal precision, and returns the lower median for even provider counts.
+- `aggregatedNAV()` reverts until heartbeat and max valuation age are configured, and also reverts unless the latest valuation timestamp has a fresh quorum. `freshProviderSubmissionCount()` and `freshProviderSubmissionAt()` expose the exact contributor set used by the aggregate.
 - Deviation detection is emitted from the non-view `publishNAV()` path once quorum is reached.
 
 ## Constants
@@ -89,7 +89,8 @@ unambiguous.
 ## ERC-4626 Integration Guidance
 
 `latestNAVStatus()` and `aggregatedNAV()` revert until staleness configuration
-is set for the `(subjectId, currency)` stream. ERC-4626 `convertToAssets()` and
+is set for the `(subjectId, currency)` stream. `aggregatedNAV()` also requires a
+fresh provider quorum at the latest aggregation timestamp. ERC-4626 `convertToAssets()` and
 `convertToShares()` integrations should not call these functions directly unless
 the stream is guaranteed to be configured before the vault is enabled. A direct
 unconfigured call can make ERC-4626 conversion functions revert unexpectedly.
