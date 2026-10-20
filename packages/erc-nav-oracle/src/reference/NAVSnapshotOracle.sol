@@ -772,12 +772,16 @@ contract NAVSnapshotOracle is INAVSnapshotOracle, INAVAggregation {
         internal
     {
         AggregationConfig memory config = _aggregationConfigs[streamKey];
-        if (config.quorum == 0) return;
-        if (_eligibleProviderCount(streamKey, valuationTimestamp) < config.quorum) return;
+        if (config.quorum == 0 || config.maxSubmissionAge == 0) return;
+        if (!_latestEligibleTimestampSet[streamKey] || _latestEligibleTimestamp[streamKey] != valuationTimestamp) {
+            return;
+        }
 
-        AggregatedSet memory set = _aggregatedSetForTimestamp(
-            streamKey, valuationTimestamp, false, 0, _eligibleProviderCount(streamKey, valuationTimestamp)
-        );
+        uint256 freshCount = _freshProviderCount(streamKey, valuationTimestamp, config.maxSubmissionAge);
+        if (freshCount < config.quorum) return;
+
+        AggregatedSet memory set =
+            _aggregatedSetForTimestamp(streamKey, valuationTimestamp, true, config.maxSubmissionAge, freshCount);
         uint256 deviationBps_ = _deviationBps(set.minNav, set.maxNav, set.medianNav);
         if (deviationBps_ > config.deviationThresholdBps) {
             emit NAVDeviationDetected(subjectId, currency, valuationTimestamp, set.minNav, set.maxNav, deviationBps_);

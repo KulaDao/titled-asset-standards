@@ -108,4 +108,18 @@ contract NAVSnapshotOracleFuzzTest {
 
         return median >= minValue && median <= maxValue;
     }
+
+    function property_aggregationAvailabilityMatchesFreshQuorum() external view returns (bool) {
+        uint256 count = oracle.snapshotCount(SUBJECT, USD);
+        if (count == 0) return true;
+
+        uint256 freshCount = oracle.freshProviderSubmissionCount(SUBJECT, USD);
+        bool shouldAggregate = freshCount >= oracle.quorum(SUBJECT, USD);
+
+        try oracle.aggregatedNAV(SUBJECT, USD) returns (int256, uint8, bytes32, uint64, uint256, bool) {
+            return shouldAggregate;
+        } catch {
+            return !shouldAggregate;
+        }
+    }
 }

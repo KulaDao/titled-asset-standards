@@ -42,7 +42,8 @@ median aggregation.
 - `latestNAVStatus()` reverts until both heartbeat and max valuation age are configured for the stream.
 - Aggregation uses the latest valuation timestamp with quorum, but includes only provider submissions within the aggregation configuration's `maxSubmissionAge`. It uses the configured stream NAV basis, normalizes decimals to the highest submitted decimal precision, and returns the lower median for even provider counts.
 - `aggregatedNAV()` reverts until both staleness thresholds and aggregation configuration are set, and also reverts unless the latest valuation timestamp has a fresh quorum. `freshProviderSubmissionCount()` and `freshProviderSubmissionAt()` require only aggregation configuration and expose the exact contributor set used by the aggregate.
-- Deviation detection is emitted from the non-view `publishNAV()` path once historical quorum is reached. It uses the complete eligible set at the affected valuation timestamp, rather than the fresh aggregate subset, so it remains a historical alert and never makes an aggregate available.
+- Deviation detection is emitted from the non-view `publishNAV()` path only when the latest historical-quorum timestamp also has a fresh quorum. It uses the same fresh contributor set as `aggregatedNAV()`, so a stale submission cannot trigger or affect a live aggregation alert.
+- `latestAggregationTimestamp()` identifies the most recent timestamp with historical eligible quorum. It does not guarantee that `aggregatedNAV()` is currently available; callers must also establish a fresh quorum.
 - A provider reattesting an unchanged valuation does so by publishing a correction, preserving the complete history. Deployments that choose a short `maxSubmissionAge` should budget for the resulting publication cadence and storage growth; aggregation work remains bounded by `MAX_PROVIDERS_PER_VALUATION`, while administrative invalidation is intentionally an exceptional operation.
 
 ## Constants

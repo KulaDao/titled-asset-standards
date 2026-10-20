@@ -705,9 +705,9 @@ contract NAVSnapshotOracleTest {
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 150, 2, T0, METHOD_1, NO_CORRECTION);
     }
 
-    function test_deviationUsesHistoricalEligibleSetWhenFreshAggregateExcludesStaleProvider() public {
+    function test_deviationUsesFreshAggregationSetWhenStaleProviderIsExcluded() public {
         vm.prank(ADMIN);
-        oracle.setAggregationConfig(SUBJECT, USD, 2, 6_000, 1 days);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 2_000, 1 days);
         vm.prank(ADMIN);
         oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
 
@@ -716,14 +716,15 @@ contract NAVSnapshotOracleTest {
         uint256 originalC = _publish(PROVIDER_C, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
 
         vm.warp(uint256(T0) + 1 days + 1);
-        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 150, 2, T0, METHOD_2, originalB);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_2, originalB);
+        _publish(PROVIDER_C, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, originalC);
 
         vm.expectEmit(true, true, false, true);
-        emit NAVDeviationDetected(SUBJECT, USD, T0, 100, 300, 13_333);
-        _publish(PROVIDER_C, SUBJECT, USD, PER_SHARE, 300, 2, T0, METHOD_2, originalC);
+        emit NAVDeviationDetected(SUBJECT, USD, T0, 110, 200, 8_181);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 200, 2, T0, METHOD_1, 3);
 
         (int256 nav,,,, uint256 freshProviderCount,) = oracle.aggregatedNAV(SUBJECT, USD);
-        _assertEq(nav, 150, "fresh aggregate excludes stale provider");
+        _assertEq(nav, 110, "fresh aggregate excludes stale provider");
         _assertEq(freshProviderCount, 2, "fresh aggregate uses two providers");
     }
 
