@@ -12,11 +12,20 @@ interface INAVAggregation {
     );
 
     event AggregationConfigUpdated(
-        bytes32 indexed subjectId, bytes32 indexed currency, uint256 quorum, uint256 deviationThresholdBps
+        bytes32 indexed subjectId,
+        bytes32 indexed currency,
+        uint256 quorum,
+        uint256 deviationThresholdBps,
+        uint64 maxSubmissionAge
     );
 
-    function setAggregationConfig(bytes32 subjectId, bytes32 currency, uint256 quorum, uint256 deviationThresholdBps)
-        external;
+    function setAggregationConfig(
+        bytes32 subjectId,
+        bytes32 currency,
+        uint256 quorum,
+        uint256 deviationThresholdBps,
+        uint64 maxSubmissionAge
+    ) external;
 
     function aggregatedNAV(bytes32 subjectId, bytes32 currency)
         external
@@ -65,4 +74,6 @@ interface INAVAggregation {
     function quorum(bytes32 subjectId, bytes32 currency) external view returns (uint256);
 
     function deviationThreshold(bytes32 subjectId, bytes32 currency) external view returns (uint256);
+
+    function maxSubmissionAge(bytes32 subjectId, bytes32 currency) external view returns (uint64);
 }

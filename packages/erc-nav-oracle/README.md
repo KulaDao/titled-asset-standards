@@ -40,9 +40,10 @@ median aggregation.
   terminal snapshot in a chain and `isSnapshotCurrent(subjectId, currency,
   snapshotIndex)` to check whether a snapshot has no successor correction.
 - `latestNAVStatus()` reverts until both heartbeat and max valuation age are configured for the stream.
-- Aggregation uses the latest valuation timestamp with quorum, but includes only provider submissions still within the configured publication heartbeat. It uses the configured stream NAV basis, normalizes decimals to the highest submitted decimal precision, and returns the lower median for even provider counts.
-- `aggregatedNAV()` reverts until heartbeat and max valuation age are configured, and also reverts unless the latest valuation timestamp has a fresh quorum. `freshProviderSubmissionCount()` and `freshProviderSubmissionAt()` expose the exact contributor set used by the aggregate.
-- Deviation detection is emitted from the non-view `publishNAV()` path once quorum is reached.
+- Aggregation uses the latest valuation timestamp with quorum, but includes only provider submissions within the aggregation configuration's `maxSubmissionAge`. It uses the configured stream NAV basis, normalizes decimals to the highest submitted decimal precision, and returns the lower median for even provider counts.
+- `aggregatedNAV()` reverts until both staleness thresholds and aggregation configuration are set, and also reverts unless the latest valuation timestamp has a fresh quorum. `freshProviderSubmissionCount()` and `freshProviderSubmissionAt()` require only aggregation configuration and expose the exact contributor set used by the aggregate.
+- Deviation detection is emitted from the non-view `publishNAV()` path once historical quorum is reached. It uses the complete eligible set at the affected valuation timestamp, rather than the fresh aggregate subset, so it remains a historical alert and never makes an aggregate available.
+- A provider reattesting an unchanged valuation does so by publishing a correction, preserving the complete history. Deployments that choose a short `maxSubmissionAge` should budget for the resulting publication cadence and storage growth; aggregation work remains bounded by `MAX_PROVIDERS_PER_VALUATION`, while administrative invalidation is intentionally an exceptional operation.
 
 ## Constants
 
@@ -88,9 +89,10 @@ unambiguous.
 
 ## ERC-4626 Integration Guidance
 
-`latestNAVStatus()` and `aggregatedNAV()` revert until staleness configuration
-is set for the `(subjectId, currency)` stream. `aggregatedNAV()` also requires a
-fresh provider quorum at the latest aggregation timestamp. ERC-4626 `convertToAssets()` and
+`latestNAVStatus()` reverts until staleness configuration is set for the
+`(subjectId, currency)` stream. `aggregatedNAV()` also requires aggregation
+configuration and a fresh provider quorum at the latest aggregation timestamp.
+ERC-4626 `convertToAssets()` and
 `convertToShares()` integrations should not call these functions directly unless
 the stream is guaranteed to be configured before the vault is enabled. A direct
 unconfigured call can make ERC-4626 conversion functions revert unexpectedly.
