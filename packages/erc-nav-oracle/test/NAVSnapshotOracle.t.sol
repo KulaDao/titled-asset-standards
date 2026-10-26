@@ -683,6 +683,25 @@ contract NAVSnapshotOracleTest {
         _assertEq(freshProviderCount, 2, "aggregate accepts exact boundary");
     }
 
+    function test_aggregationRevertsWhenProviderPublicationSpreadExceedsFreshnessWindow() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T0) + 1 days + 1);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, NO_CORRECTION);
+
+        _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T0, "historical quorum timestamp");
+        _assertEq(oracle.providerSubmissionCount(SUBJECT, USD), 2, "historical provider count");
+        _assertEq(oracle.freshProviderSubmissionCount(SUBJECT, USD), 1, "only delayed provider is fresh");
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: fresh quorum not met"));
+        oracle.aggregatedNAV(SUBJECT, USD);
+    }
+
     function test_aggregationDoesNotFallbackToOlderFreshValuationTimestamp() public {
         vm.prank(ADMIN);
         oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
