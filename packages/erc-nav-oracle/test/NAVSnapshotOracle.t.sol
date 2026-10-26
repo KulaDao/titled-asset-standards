@@ -7,11 +7,19 @@ import {NAVSnapshotOracle} from "../src/reference/NAVSnapshotOracle.sol";
 import {EUR, PER_SHARE, PER_UNIT, TOTAL, USD, deriveTokenCurrency} from "../src/libraries/NAVConstants.sol";
 
 interface Vm {
+    struct Log {
+        bytes32[] topics;
+        bytes data;
+        address emitter;
+    }
+
     function expectRevert(bytes calldata revertData) external;
     function expectEmit(bool checkTopic1, bool checkTopic2, bool checkTopic3, bool checkData) external;
     function prank(address msgSender) external;
     function warp(uint256 newTimestamp) external;
     function addr(uint256 privateKey) external returns (address keyAddr);
+    function recordLogs() external;
+    function getRecordedLogs() external returns (Log[] memory entries);
 }
 
 contract NAVSnapshotOracleTest {
@@ -728,6 +736,62 @@ contract NAVSnapshotOracleTest {
         _assertEq(freshProviderCount, 2, "fresh aggregate uses two providers");
     }
 
+    function test_deviationDoesNotEmitWhenOnlyOneProviderIsFresh() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 1_000, 1 days);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
+
+        uint256 originalA = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 10, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T0) + 1 days + 1);
+        vm.recordLogs();
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_2, originalA);
+        _assertNoDeviationDetected(vm.getRecordedLogs());
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: fresh quorum not met"));
+        oracle.aggregatedNAV(SUBJECT, USD);
+    }
+
+    function test_deviationDoesNotEmitForStaleOutlierExcludedFromFreshSet() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 1_000, 1 days);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
+
+        uint256 originalA = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        uint256 originalB = _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_C, SUBJECT, USD, PER_SHARE, 10, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T0) + 1 days + 1);
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_2, originalA);
+
+        vm.recordLogs();
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, originalB);
+        _assertNoDeviationDetected(vm.getRecordedLogs());
+
+        (int256 nav,,,, uint256 freshProviderCount,) = oracle.aggregatedNAV(SUBJECT, USD);
+        _assertEq(nav, 100, "fresh lower median excludes stale outlier");
+        _assertEq(freshProviderCount, 2, "fresh contributors only");
+    }
+
+    function test_deviationDoesNotEmitForOlderNonSelectedValuationTimestamp() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 100, 1 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 10, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T1, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T1, METHOD_1, NO_CORRECTION);
+
+        _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T1, "newer valuation selected");
+
+        vm.recordLogs();
+        _publish(PROVIDER_C, SUBJECT, USD, PER_SHARE, 200, 2, T0, METHOD_1, NO_CORRECTION);
+        _assertNoDeviationDetected(vm.getRecordedLogs());
+    }
+
     function test_deviationOverflowReturnsMaxInsteadOfReverting() public {
         int256 huge = type(int256).max / 1e18;
         int256 normalizedMin = -huge * int256(1e18);
@@ -959,6 +1023,15 @@ contract NAVSnapshotOracleTest {
     function _configureBasis(bytes32 subjectId, bytes32 currency, bytes32 navBasis) internal {
         vm.prank(ADMIN);
         oracle.setNAVBasis(subjectId, currency, navBasis);
+    }
+
+    function _assertNoDeviationDetected(Vm.Log[] memory entries) internal view {
+        bytes32 signature = keccak256("NAVDeviationDetected(bytes32,bytes32,uint64,int256,int256,uint256)");
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].emitter == address(oracle) && entries[i].topics.length > 0) {
+                require(entries[i].topics[0] != signature, "unexpected NAVDeviationDetected");
+            }
+        }
     }
 
     function _assertTrue(bool condition, string memory message) internal pure {
