@@ -7,11 +7,19 @@ import {NAVSnapshotOracle} from "../src/reference/NAVSnapshotOracle.sol";
 import {EUR, PER_SHARE, PER_UNIT, TOTAL, USD, deriveTokenCurrency} from "../src/libraries/NAVConstants.sol";
 
 interface Vm {
+    struct Log {
+        bytes32[] topics;
+        bytes data;
+        address emitter;
+    }
+
     function expectRevert(bytes calldata revertData) external;
     function expectEmit(bool checkTopic1, bool checkTopic2, bool checkTopic3, bool checkData) external;
     function prank(address msgSender) external;
     function warp(uint256 newTimestamp) external;
     function addr(uint256 privateKey) external returns (address keyAddr);
+    function recordLogs() external;
+    function getRecordedLogs() external returns (Log[] memory entries);
 }
 
 contract NAVSnapshotOracleTest {
@@ -415,16 +423,37 @@ contract NAVSnapshotOracleTest {
         oracle.aggregatedNAV(SUBJECT, USD);
 
         vm.prank(ADMIN);
-        oracle.setAggregationConfig(SUBJECT, USD, 2, 1_000);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 1_000, 1 days);
 
         vm.expectRevert(bytes("NAVSnapshotOracle: quorum not met"));
         oracle.aggregatedNAV(SUBJECT, USD);
     }
 
+    function test_freshProviderQueriesRequireHistoricalQuorum() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 1_000, 1 days);
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: quorum not met"));
+        oracle.freshProviderSubmissionCount(SUBJECT, USD);
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: quorum not met"));
+        oracle.freshProviderSubmissionAt(SUBJECT, USD, 0);
+    }
+
+    function test_setAggregationConfigStoresFreshnessWindow() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 1_000, 7 days);
+
+        _assertEq(oracle.quorum(SUBJECT, USD), 2, "quorum");
+        _assertEq(oracle.deviationThreshold(SUBJECT, USD), 1_000, "deviation threshold");
+        _assertEq(oracle.maxSubmissionAge(SUBJECT, USD), 7 days, "max submission age");
+    }
+
     function test_setAggregationConfigRejectsDeviationThresholdAboveBpsScale() public {
         vm.prank(ADMIN);
         vm.expectRevert(bytes("NAVSnapshotOracle: deviationThresholdBps too high"));
-        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_001);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_001, 1 days);
     }
 
     function test_setAggregationConfigRejectsQuorumAboveProviderCap() public {
@@ -432,7 +461,13 @@ contract NAVSnapshotOracleTest {
 
         vm.prank(ADMIN);
         vm.expectRevert(bytes("NAVSnapshotOracle: quorum too high"));
-        oracle.setAggregationConfig(SUBJECT, USD, cap + 1, 10_000);
+        oracle.setAggregationConfig(SUBJECT, USD, cap + 1, 10_000, 1 days);
+    }
+
+    function test_setAggregationConfigRejectsZeroMaxSubmissionAge() public {
+        vm.prank(ADMIN);
+        vm.expectRevert(bytes("NAVSnapshotOracle: zero maxSubmissionAge"));
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 0);
     }
 
     function test_publishNAVRejectsProviderSetAboveCap() public {
@@ -457,7 +492,7 @@ contract NAVSnapshotOracleTest {
 
     function test_aggregationMedianNormalizesDecimalsAndReturnsLatestQuorumTimestamp() public {
         vm.prank(ADMIN);
-        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
         vm.prank(ADMIN);
         oracle.setStalenessConfig(SUBJECT, USD, 1 days, 30 days);
 
@@ -472,7 +507,6 @@ contract NAVSnapshotOracleTest {
             bytes32 basis,
             uint64 valuationTimestamp,
             uint256 providerCount,
-            bool publishStale,
             bool valuationStale
         ) = oracle.aggregatedNAV(SUBJECT, USD);
 
@@ -481,13 +515,12 @@ contract NAVSnapshotOracleTest {
         _assertEq(basis, PER_SHARE, "aggregation basis");
         _assertEq(valuationTimestamp, T1, "latest quorum timestamp");
         _assertEq(providerCount, 2, "provider count");
-        _assertFalse(publishStale, "publish not stale");
         _assertFalse(valuationStale, "valuation not stale");
     }
 
     function test_aggregationProviderSubmissionAtUsesLatestQuorumTimestamp() public {
         vm.prank(ADMIN);
-        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
 
         _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, NO_CORRECTION);
@@ -510,7 +543,7 @@ contract NAVSnapshotOracleTest {
         _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 200, 2, T1, METHOD_1, NO_CORRECTION);
 
         vm.prank(ADMIN);
-        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
         _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T0, "historical quorum timestamp");
 
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 201, 2, T1, METHOD_1, NO_CORRECTION);
@@ -519,7 +552,7 @@ contract NAVSnapshotOracleTest {
 
     function test_publishNAVRejectsMismatchedStreamBasis() public {
         vm.prank(ADMIN);
-        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
         vm.prank(ADMIN);
         oracle.setStalenessConfig(SUBJECT, USD, 1 days, 30 days);
 
@@ -531,7 +564,7 @@ contract NAVSnapshotOracleTest {
 
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, NO_CORRECTION);
 
-        (,, bytes32 basis,,,,) = oracle.aggregatedNAV(SUBJECT, USD);
+        (,, bytes32 basis,,,) = oracle.aggregatedNAV(SUBJECT, USD);
         _assertEq(basis, PER_SHARE, "aggregation basis");
     }
 
@@ -546,7 +579,7 @@ contract NAVSnapshotOracleTest {
 
     function test_aggregationDoesNotBrickAfterRejectedMismatchedBasis() public {
         vm.prank(ADMIN);
-        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
         vm.prank(ADMIN);
         oracle.setStalenessConfig(SUBJECT, USD, 1 days, 30 days);
 
@@ -561,14 +594,14 @@ contract NAVSnapshotOracleTest {
 
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, NO_CORRECTION);
 
-        (int256 nav,, bytes32 basis,,,,) = oracle.aggregatedNAV(SUBJECT, USD);
+        (int256 nav,, bytes32 basis,,,) = oracle.aggregatedNAV(SUBJECT, USD);
         _assertEq(nav, 100, "lower median after valid provider submission");
         _assertEq(basis, PER_SHARE, "stream basis after rejected mismatch");
     }
 
     function test_aggregationUsesCorrectedProviderSubmission() public {
         vm.prank(ADMIN);
-        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
         vm.prank(ADMIN);
         oracle.setStalenessConfig(SUBJECT, USD, 1 days, 30 days);
 
@@ -576,7 +609,7 @@ contract NAVSnapshotOracleTest {
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 200, 2, T0, METHOD_1, NO_CORRECTION);
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 120, 2, T0, METHOD_2, 1);
 
-        (int256 nav,,,,,,) = oracle.aggregatedNAV(SUBJECT, USD);
+        (int256 nav,,,,,) = oracle.aggregatedNAV(SUBJECT, USD);
         _assertEq(nav, 100, "lower median uses corrected terminal values");
 
         (uint256 snapshotIndex, address provider, int256 submissionNav,,,,) =
@@ -586,9 +619,123 @@ contract NAVSnapshotOracleTest {
         _assertEq(submissionNav, 120, "corrected provider nav");
     }
 
+    function test_aggregationRequiresFreshQuorumAndExposesFreshContributors() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 200, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T0) + 1 days + 1);
+        uint256 correctedA = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 125, 2, T0, METHOD_2, 0);
+
+        _assertEq(oracle.providerSubmissionCount(SUBJECT, USD), 2, "full eligible provider count");
+        _assertEq(oracle.freshProviderSubmissionCount(SUBJECT, USD), 1, "one fresh provider");
+        vm.expectRevert(bytes("NAVSnapshotOracle: fresh quorum not met"));
+        oracle.aggregatedNAV(SUBJECT, USD);
+
+        uint256 correctedB = _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 175, 2, T0, METHOD_2, 1);
+        _assertEq(oracle.freshProviderSubmissionCount(SUBJECT, USD), 2, "fresh quorum provider count");
+
+        (uint256 snapshotIndexA, address providerA, int256 navA,,,,) = oracle.freshProviderSubmissionAt(SUBJECT, USD, 0);
+        (uint256 snapshotIndexB, address providerB, int256 navB,,,,) = oracle.freshProviderSubmissionAt(SUBJECT, USD, 1);
+        _assertEq(snapshotIndexA, correctedA, "first fresh correction index");
+        _assertEq(providerA, PROVIDER_A, "first fresh provider");
+        _assertEq(navA, 125, "first fresh nav");
+        _assertEq(snapshotIndexB, correctedB, "second fresh correction index");
+        _assertEq(providerB, PROVIDER_B, "second fresh provider");
+        _assertEq(navB, 175, "second fresh nav");
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: fresh submission index out of range"));
+        oracle.freshProviderSubmissionAt(SUBJECT, USD, 2);
+
+        (int256 nav,,,, uint256 freshProviderCount, bool valuationStale) = oracle.aggregatedNAV(SUBJECT, USD);
+        _assertEq(nav, 125, "lower median uses fresh values");
+        _assertEq(freshProviderCount, 2, "returned fresh provider count");
+        _assertFalse(valuationStale, "valuation remains current");
+    }
+
+    function test_aggregationExcludesStaleProviderFromMedian() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        uint256 originalB = _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 200, 2, T0, METHOD_1, NO_CORRECTION);
+        uint256 originalC = _publish(PROVIDER_C, SUBJECT, USD, PER_SHARE, 300, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T0) + 1 days + 1);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 200, 2, T0, METHOD_2, originalB);
+        _publish(PROVIDER_C, SUBJECT, USD, PER_SHARE, 300, 2, T0, METHOD_2, originalC);
+
+        _assertEq(oracle.providerSubmissionCount(SUBJECT, USD), 3, "historical provider count");
+        _assertEq(oracle.freshProviderSubmissionCount(SUBJECT, USD), 2, "fresh provider count");
+
+        (int256 nav,,,, uint256 freshProviderCount,) = oracle.aggregatedNAV(SUBJECT, USD);
+        _assertEq(nav, 200, "lower median excludes stale provider");
+        _assertEq(freshProviderCount, 2, "aggregate uses fresh quorum");
+    }
+
+    function test_submissionFreshnessIncludesExactBoundary() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 200, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T0) + 1 days);
+        _assertEq(oracle.freshProviderSubmissionCount(SUBJECT, USD), 2, "boundary submissions remain fresh");
+
+        (,,,, uint256 freshProviderCount,) = oracle.aggregatedNAV(SUBJECT, USD);
+        _assertEq(freshProviderCount, 2, "aggregate accepts exact boundary");
+    }
+
+    function test_aggregationRevertsWhenProviderPublicationSpreadExceedsFreshnessWindow() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T0) + 1 days + 1);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, NO_CORRECTION);
+
+        _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T0, "historical quorum timestamp");
+        _assertEq(oracle.providerSubmissionCount(SUBJECT, USD), 2, "historical provider count");
+        _assertEq(oracle.freshProviderSubmissionCount(SUBJECT, USD), 1, "only delayed provider is fresh");
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: fresh quorum not met"));
+        oracle.aggregatedNAV(SUBJECT, USD);
+    }
+
+    function test_aggregationDoesNotFallbackToOlderFreshValuationTimestamp() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 1 days, 30 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 200, 2, T1, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 201, 2, T1, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T1) + 1 days + 1);
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T0, METHOD_1, NO_CORRECTION);
+
+        _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T1, "latest valuation remains selected");
+        _assertEq(oracle.freshProviderSubmissionCount(SUBJECT, USD), 0, "latest valuation has no fresh providers");
+        vm.expectRevert(bytes("NAVSnapshotOracle: fresh quorum not met"));
+        oracle.aggregatedNAV(SUBJECT, USD);
+    }
+
     function test_deviationEventEmitsFromPublishPath() public {
         vm.prank(ADMIN);
-        oracle.setAggregationConfig(SUBJECT, USD, 2, 100);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 100, 1 days);
 
         _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
 
@@ -597,12 +744,91 @@ contract NAVSnapshotOracleTest {
         _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 150, 2, T0, METHOD_1, NO_CORRECTION);
     }
 
+    function test_deviationUsesFreshAggregationSetWhenStaleProviderIsExcluded() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 2_000, 1 days);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        uint256 originalB = _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        uint256 originalC = _publish(PROVIDER_C, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T0) + 1 days + 1);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_2, originalB);
+        _publish(PROVIDER_C, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, originalC);
+
+        vm.expectEmit(true, true, false, true);
+        emit NAVDeviationDetected(SUBJECT, USD, T0, 110, 200, 8_181);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 200, 2, T0, METHOD_1, 3);
+
+        (int256 nav,,,, uint256 freshProviderCount,) = oracle.aggregatedNAV(SUBJECT, USD);
+        _assertEq(nav, 110, "fresh aggregate excludes stale provider");
+        _assertEq(freshProviderCount, 2, "fresh aggregate uses two providers");
+    }
+
+    function test_deviationDoesNotEmitWhenOnlyOneProviderIsFresh() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 1_000, 1 days);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
+
+        uint256 originalA = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 10, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T0) + 1 days + 1);
+        vm.recordLogs();
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_2, originalA);
+        _assertNoDeviationDetected(vm.getRecordedLogs());
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: fresh quorum not met"));
+        oracle.aggregatedNAV(SUBJECT, USD);
+    }
+
+    function test_deviationDoesNotEmitForStaleOutlierExcludedFromFreshSet() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 1_000, 1 days);
+        vm.prank(ADMIN);
+        oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
+
+        uint256 originalA = _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        uint256 originalB = _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_C, SUBJECT, USD, PER_SHARE, 10, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.warp(uint256(T0) + 1 days + 1);
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_2, originalA);
+
+        vm.recordLogs();
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 110, 2, T0, METHOD_2, originalB);
+        _assertNoDeviationDetected(vm.getRecordedLogs());
+
+        (int256 nav,,,, uint256 freshProviderCount,) = oracle.aggregatedNAV(SUBJECT, USD);
+        _assertEq(nav, 100, "fresh lower median excludes stale outlier");
+        _assertEq(freshProviderCount, 2, "fresh contributors only");
+    }
+
+    function test_deviationDoesNotEmitForOlderNonSelectedValuationTimestamp() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 100, 1 days);
+
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 10, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T1, METHOD_1, NO_CORRECTION);
+        _publish(PROVIDER_B, SUBJECT, USD, PER_SHARE, 101, 2, T1, METHOD_1, NO_CORRECTION);
+
+        _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T1, "newer valuation selected");
+
+        vm.recordLogs();
+        _publish(PROVIDER_C, SUBJECT, USD, PER_SHARE, 200, 2, T0, METHOD_1, NO_CORRECTION);
+        _assertNoDeviationDetected(vm.getRecordedLogs());
+    }
+
     function test_deviationOverflowReturnsMaxInsteadOfReverting() public {
         int256 huge = type(int256).max / 1e18;
         int256 normalizedMin = -huge * int256(1e18);
 
         vm.prank(ADMIN);
-        oracle.setAggregationConfig(SUBJECT, USD, 2, 100);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 100, 1 days);
 
         _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, -huge, 0, T0, METHOD_1, NO_CORRECTION);
 
@@ -615,7 +841,7 @@ contract NAVSnapshotOracleTest {
         bytes32 reasonHash = keccak256("revoked provider poisoned snapshot");
 
         vm.prank(ADMIN);
-        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 10_000, 1 days);
         vm.prank(ADMIN);
         oracle.setStalenessConfig(SUBJECT, USD, 30 days, 30 days);
 
@@ -638,8 +864,7 @@ contract NAVSnapshotOracleTest {
         _assertEq(oracle.latestAggregationTimestamp(SUBJECT, USD), T0, "aggregation falls back to prior quorum");
         _assertEq(oracle.providerSubmissionCount(SUBJECT, USD), 2, "prior quorum provider count");
 
-        (int256 aggregatedNav,,, uint64 valuationTimestamp, uint256 providerCount,,) =
-            oracle.aggregatedNAV(SUBJECT, USD);
+        (int256 aggregatedNav,,, uint64 valuationTimestamp, uint256 providerCount,) = oracle.aggregatedNAV(SUBJECT, USD);
         _assertEq(aggregatedNav, 100, "prior quorum median");
         _assertEq(valuationTimestamp, T0, "prior quorum timestamp");
         _assertEq(providerCount, 2, "aggregation provider count");
@@ -829,6 +1054,15 @@ contract NAVSnapshotOracleTest {
     function _configureBasis(bytes32 subjectId, bytes32 currency, bytes32 navBasis) internal {
         vm.prank(ADMIN);
         oracle.setNAVBasis(subjectId, currency, navBasis);
+    }
+
+    function _assertNoDeviationDetected(Vm.Log[] memory entries) internal view {
+        bytes32 signature = keccak256("NAVDeviationDetected(bytes32,bytes32,uint64,int256,int256,uint256)");
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].emitter == address(oracle) && entries[i].topics.length > 0) {
+                require(entries[i].topics[0] != signature, "unexpected NAVDeviationDetected");
+            }
+        }
     }
 
     function _assertTrue(bool condition, string memory message) internal pure {

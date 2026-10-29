@@ -294,7 +294,7 @@ interface IMethodologyVersioning {
 
 ### [ERC-8330 Subject-Linked NAV Snapshot Oracle](./packages/erc-nav-oracle)
 
-A subject-keyed, provider-attributed NAV snapshot oracle with quorum-based aggregation, decimal normalization, fork-free correction chains, and explicit publication and valuation staleness. NAV snapshots are keyed by `(subjectId, currency)`.
+A subject-keyed, provider-attributed NAV snapshot oracle with quorum-based aggregation, decimal normalization, fork-free correction chains, and separate publication and valuation staleness. NAV snapshots are keyed by `(subjectId, currency)`. `aggregatedNAV()` reports valuation staleness only; consumers use `latestNAVStatus()` to check publication staleness.
 
 **Core interface:**
 
@@ -327,14 +327,46 @@ interface INAVSnapshotOracle {
 }
 
 interface INAVAggregation {
+    function setAggregationConfig(
+        bytes32 subjectId,
+        bytes32 currency,
+        uint256 quorum,
+        uint256 deviationThresholdBps,
+        uint64 maxSubmissionAge
+    ) external;
+
     function aggregatedNAV(bytes32 subjectId, bytes32 currency)
-        external view returns (int256 nav, uint8 decimals, uint8 navBasis, uint64 valuationTimestamp);
+        external view returns (
+            int256 nav,
+            uint8 decimals,
+            bytes32 navBasis,
+            uint64 valuationTimestamp,
+            uint256 freshProviderCount,
+            bool isValuationStale
+        );
+
+    function freshProviderSubmissionCount(bytes32 subjectId, bytes32 currency)
+        external view returns (uint256);
+
+    function freshProviderSubmissionAt(bytes32 subjectId, bytes32 currency, uint256 index)
+        external view returns (
+            uint256 snapshotIndex,
+            address provider,
+            int256 nav,
+            uint8 decimals,
+            bytes32 navBasis,
+            uint64 valuationTimestamp,
+            uint64 publishedAt
+        );
+
+    function maxSubmissionAge(bytes32 subjectId, bytes32 currency)
+        external view returns (uint64);
 }
 ```
 
 **NAV basis constants:** `PER_UNIT`, `PER_SHARE`, `TOTAL`. **Currency constants:** `USD`, `EUR`, `GBP`, `KES`, `ZMW`.
 
-**Aggregation:** Median over provider submissions at the most recent valuation timestamp with quorum. Decimals are normalized to the highest submitted precision. Mixed NAV basis submissions revert. Corrected snapshots are excluded from the aggregation set.
+**Aggregation:** Lower median over fresh provider submissions at the most recent valuation timestamp with quorum. A provider submission must be within the aggregation configuration's `maxSubmissionAge` to contribute; the aggregate is unavailable until a fresh quorum exists. Decimals are normalized to the highest submitted precision. Mixed NAV basis submissions revert. Corrected snapshots are excluded from the aggregation set.
 
 **Staleness:** Two independent thresholds — `heartbeat` (maximum age of last publication) and `maxValuationAge` (maximum age of the underlying valuation). Both are configured per `(subjectId, currency)` stream.
 

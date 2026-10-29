@@ -17,7 +17,7 @@ median aggregation.
 | Interface | Purpose |
 |-----------|---------|
 | `INAVSnapshotOracle` | Publish, correct, invalidate, and query NAV snapshots keyed by `(subjectId, currency)` |
-| `INAVAggregation` | Query deterministic median NAV across provider submissions |
+| `INAVAggregation` | Query deterministic lower-median NAV across a fresh provider quorum |
 
 ## Key Semantics
 
@@ -40,9 +40,14 @@ median aggregation.
   terminal snapshot in a chain and `isSnapshotCurrent(subjectId, currency,
   snapshotIndex)` to check whether a snapshot has no successor correction.
 - `latestNAVStatus()` reverts until both heartbeat and max valuation age are configured for the stream.
-- Aggregation uses the latest valuation timestamp with quorum, uses the configured stream NAV basis, normalizes decimals to the highest submitted decimal precision, and returns the lower median for even provider counts.
-- `aggregatedNAV()` also reverts until heartbeat and max valuation age are configured, since it returns staleness flags.
-- Deviation detection is emitted from the non-view `publishNAV()` path once quorum is reached.
+- Aggregation uses the latest valuation timestamp with quorum, but includes only provider submissions within the aggregation configuration's `maxSubmissionAge`. It uses the configured stream NAV basis, normalizes decimals to the highest submitted decimal precision, and returns the lower median for even provider counts.
+- `aggregatedNAV()` reverts until both staleness thresholds and aggregation configuration are set, and also reverts unless the latest valuation timestamp has a fresh quorum. `freshProviderSubmissionCount()` and `freshProviderSubmissionAt()` require aggregation configuration and a historical-quorum timestamp. They expose the exact contributor set used by the aggregate, including when that set falls short of fresh quorum.
+- Configure `maxSubmissionAge` to exceed the expected publication spread among the required providers for one valuation round. A round can meet historical quorum while lacking a fresh quorum; `aggregatedNAV()` intentionally reverts in that case rather than silently using an older valuation. Consumers should handle that availability boundary explicitly or use a separately cached accepted NAV.
+- The fresh-quorum aggregation revision changes the `INAVAggregation` ERC-165 interface ID and the `aggregatedNAV()` return tuple. Integrations MUST verify support for the revised interface ID before decoding an aggregate response; a successful call to an earlier deployment can otherwise be decoded silently but incorrectly.
+- Deviation detection is emitted from the non-view `publishNAV()` path only when the latest historical-quorum timestamp also has a fresh quorum. It uses the same fresh contributor set as `aggregatedNAV()`, so a stale submission cannot trigger or affect a live aggregation alert.
+- `latestAggregationTimestamp()` identifies the most recent timestamp with historical eligible quorum. It does not guarantee that `aggregatedNAV()` is currently available; callers must also establish a fresh quorum.
+- `aggregatedNAV()` returns valuation staleness only. Consumers must call `latestNAVStatus()` to evaluate the stream's publication staleness.
+- A provider reattesting an unchanged valuation does so by publishing a correction, preserving the complete history. Deployments that choose a short `maxSubmissionAge` should budget for the resulting publication cadence and storage growth; aggregation work remains bounded by `MAX_PROVIDERS_PER_VALUATION`, while administrative invalidation is intentionally an exceptional operation.
 
 ## Constants
 
@@ -88,8 +93,10 @@ unambiguous.
 
 ## ERC-4626 Integration Guidance
 
-`latestNAVStatus()` and `aggregatedNAV()` revert until staleness configuration
-is set for the `(subjectId, currency)` stream. ERC-4626 `convertToAssets()` and
+`latestNAVStatus()` reverts until staleness configuration is set for the
+`(subjectId, currency)` stream. `aggregatedNAV()` also requires aggregation
+configuration and a fresh provider quorum at the latest aggregation timestamp.
+ERC-4626 `convertToAssets()` and
 `convertToShares()` integrations should not call these functions directly unless
 the stream is guaranteed to be configured before the vault is enabled. A direct
 unconfigured call can make ERC-4626 conversion functions revert unexpectedly.
