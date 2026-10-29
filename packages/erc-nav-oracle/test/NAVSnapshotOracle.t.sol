@@ -429,6 +429,18 @@ contract NAVSnapshotOracleTest {
         oracle.aggregatedNAV(SUBJECT, USD);
     }
 
+    function test_freshProviderQueriesRequireHistoricalQuorum() public {
+        vm.prank(ADMIN);
+        oracle.setAggregationConfig(SUBJECT, USD, 2, 1_000, 1 days);
+        _publish(PROVIDER_A, SUBJECT, USD, PER_SHARE, 100, 2, T0, METHOD_1, NO_CORRECTION);
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: quorum not met"));
+        oracle.freshProviderSubmissionCount(SUBJECT, USD);
+
+        vm.expectRevert(bytes("NAVSnapshotOracle: quorum not met"));
+        oracle.freshProviderSubmissionAt(SUBJECT, USD, 0);
+    }
+
     function test_setAggregationConfigStoresFreshnessWindow() public {
         vm.prank(ADMIN);
         oracle.setAggregationConfig(SUBJECT, USD, 2, 1_000, 7 days);

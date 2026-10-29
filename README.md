@@ -294,7 +294,7 @@ interface IMethodologyVersioning {
 
 ### [ERC-8330 Subject-Linked NAV Snapshot Oracle](./packages/erc-nav-oracle)
 
-A subject-keyed, provider-attributed NAV snapshot oracle with quorum-based aggregation, decimal normalization, fork-free correction chains, and explicit publication and valuation staleness. NAV snapshots are keyed by `(subjectId, currency)`.
+A subject-keyed, provider-attributed NAV snapshot oracle with quorum-based aggregation, decimal normalization, fork-free correction chains, and separate publication and valuation staleness. NAV snapshots are keyed by `(subjectId, currency)`. `aggregatedNAV()` reports valuation staleness only; consumers use `latestNAVStatus()` to check publication staleness.
 
 **Core interface:**
 
@@ -358,6 +358,9 @@ interface INAVAggregation {
             uint64 valuationTimestamp,
             uint64 publishedAt
         );
+
+    function maxSubmissionAge(bytes32 subjectId, bytes32 currency)
+        external view returns (uint64);
 }
 ```
 
